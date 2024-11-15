@@ -3,4 +3,5 @@ tsconfig.json
 jest.config.js
 *.test.js
 *.spec.js
+*.map
 node_modules/
