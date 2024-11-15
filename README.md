@@ -247,7 +247,7 @@ NEXT_PUBLIC_GITHUB_REDIRECT_URI="..."
 ```typescript
 'use client';
 
-import { useEffect, use } from 'react';
+import { useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticateWithGitHub, createSession, useAuth } from 'authlite';
 import { UserType } from '...';
@@ -256,6 +256,9 @@ export default function AuthCallbackPage({searchParams}: { searchParams: Promise
     const { code } = use(searchParams);
     const router = useRouter();
     const { onLogin } = useAuth();
+
+    // Skip unnecessary dependency that can cause error
+    const onLoginRef = useRef(onLogin);
 
     useEffect(() => {
         const handleAuth = async () => {
@@ -269,7 +272,7 @@ export default function AuthCallbackPage({searchParams}: { searchParams: Promise
                 const userObj: UserType = { ... }
                 const success = await createSession(userObj);
                 if (success) {
-                    await onLogin();
+                    await onLoginRef.current();
                     router.push('...');
                 }
                 else {
@@ -317,7 +320,7 @@ NEXT_PUBLIC_GOOGLE_REDIRECT_URI="..."
 ```typescript
 'use client';
 
-import { useEffect, use } from 'react';
+import { useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticateWithGoogle, createSession, useAuth } from 'authlite';
 import { UserType } from  '...';
@@ -326,6 +329,9 @@ export default function AuthCallbackPage({searchParams}: { searchParams: Promise
     const { code } = use(searchParams);
     const router = useRouter();
     const { onLogin } = useAuth();
+
+    // Skip unnecessary dependency that can cause error
+    const onLoginRef = useRef(onLogin);
 
     useEffect(() => {
         const handleAuth = async () => {
@@ -339,7 +345,7 @@ export default function AuthCallbackPage({searchParams}: { searchParams: Promise
                 const userObj: UserType = { ... }
                 const success = await createSession(userObj);
                 if (success) {
-                    await onLogin();
+                    await onLoginRef.current();
                     router.push('...');
                 }
                 else {
