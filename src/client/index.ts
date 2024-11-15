@@ -6,8 +6,8 @@ import { authenticateSession, deleteSession, getSession } from "../server";
 type AuthContextType<T> = {
     session: T | null | undefined;
     setSession: React.Dispatch<React.SetStateAction<T | null | undefined>>;
-    onLogin: (afterLoginUrl?: string) => Promise<void>;
-    onLogout: (afterLogoutUrl?: string) => Promise<void>;
+    onLogin: () => Promise<void>;
+    onLogout: () => Promise<void>;
 };
 
 // Create the context with a default value
