@@ -1,0 +1,6 @@
+src/
+tsconfig.json
+jest.config.js
+*.test.js
+*.spec.js
+node_modules/
