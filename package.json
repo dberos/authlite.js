@@ -6,7 +6,7 @@
   "author": "Dimitris Beros",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dberos/authlite.js.git"
+    "url": "git+https://github.com/dberos/authlite.js.git"
   },
   "homepage": "https://github.com/dberos/authlite.js#readme",
   "license": "MIT",
