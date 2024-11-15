@@ -4,6 +4,11 @@
   "description": "Simple authentication system for Next.js",
   "keywords": ["next.js", "auth-library"],
   "author": "Dimitris Beros",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dberos/authlite.js.git"
+  },
+  "homepage": "https://github.com/dberos/authlite.js#readme",
   "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
