@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
 import { generateCsrfToken, MiddlewareCallbackType } from "../lib/utils";
@@ -10,25 +10,8 @@ if (!secret) throw new Error('No JWT_SECRET provided');
 const JWT_SECRET = new TextEncoder().encode(secret);
 
 export const AuthMiddlewareUtils = async (request: NextRequest, callback?: MiddlewareCallbackType): Promise<NextResponse> => {
-    // Generate a new CSRF token
-    const csrfToken = await generateCsrfToken();
-    // Set it in the cookie
-    const cookieStore = await cookies();
-    cookieStore.set('csrfToken', csrfToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 60,
-        path: '/',
-    });
-
-    // Generate a response
-    const response = NextResponse.next();
-    // Set the headers
-    response.headers.set('X-Csrf-Token', csrfToken);
-
     // Refresh the session
-    const refreshedResponse = await refreshSession(request, response);
+    const refreshedResponse = await refreshSession(request);
 
     // If the session did not refresh
     if (!refreshedResponse.cookies.get('session')) {
@@ -54,28 +37,28 @@ export const AuthMiddlewareUtils = async (request: NextRequest, callback?: Middl
  * @returns refreshed response
  * @throws Error if csrf header doesn't match
  */
-export const refreshSession = async (request: NextRequest, response: NextResponse): Promise<NextResponse<unknown>> => {
-    // Get the csrf token from cookies
-    const cookieStore = await cookies();
-    const csrfTokenCookie = cookieStore.get('csrfToken')?.value;
-    // Check that the cookie exists
-    if (!csrfTokenCookie) {
-        return NextResponse.json({ error: "Failed to verify CSRF token" }, { status: 403 });
-    }
-
-    // Get the csrf token from headers
-    const csrfTokenHeader = response.headers.get('X-Csrf-Token');
-
-    // Check that they match
-    if (csrfTokenCookie !== csrfTokenHeader) {
-        return NextResponse.json({ error: "Failed to verify CSRF token" }, { status: 403 });
-    }
+export const refreshSession = async (request: NextRequest): Promise<NextResponse<unknown>> => {
+    // Generate a csrf token
+    const csrfToken = await generateCsrfToken();
+    // Generate a response
+    const response = NextResponse.next();
+    // Set the response header
+    response.headers.set('X-Csrf-Token', csrfToken);
+    // Set the response cookie
+    response.cookies.set('csrfToken', csrfToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60,
+        path: '/',
+    });
 
     // Get the session cookie
     const token = request.cookies.get('session')?.value;
     // If no session is available return
     if (!token) return response;
 
+    // Decode the token verifying the signature
     const decodedToken = await decodeJwt(token, JWT_SECRET);
     // If signature didn't verify return error
     if (!decodedToken) {
@@ -92,9 +75,28 @@ export const refreshSession = async (request: NextRequest, response: NextRespons
         maxAge: 60 * 60 * 24 * 90,
         path: '/',
     });
-
+    // Return the refreshed response
     return response;
 };
+
+/**
+ * Validates the csrf token found in cookies and header
+ * @async
+ * @returns Boolean 
+ */
+export const validateCsrfToken = async (): Promise<boolean> => {
+    // Get the cookies
+    const cookieStore = await cookies();
+    // Get the headers
+    const headersList = await headers();
+
+    // Get the values from cookie and header
+    const cookieToken = cookieStore.get('csrfToken')?.value;
+    const headerToken = headersList.get('X-Csrf-Token');
+
+    // Check if they match
+    return cookieToken === headerToken;
+}
 
 /**
  * Utility function to be used at login at the server

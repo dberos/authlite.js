@@ -7,6 +7,7 @@ export { protect } from './lib/utils';
 export { loginWithGitHub } from './lib/utils';
 export { loginWithGoogle } from './lib/utils';
 
+export { validateCsrfToken } from './server';
 export { createSession } from './server';
 export { getSession } from './server';
 export { authenticateSession } from './server';

@@ -1,6 +1,6 @@
 # authlite.js
-Simple authentication system for [Next.js](https://nextjs.org/).
-`authlite.js` is designed to simplify the authentication process fitting personal project needs, but can be used by anyone. Currently maintained for **Next.js v15**.
+Lite authentication system for [Next.js](https://nextjs.org/).
+**authlite.js** is designed to simplify the authentication process fitting personal project needs, but can be used by anyone. Currently maintained for `Next.js v15`.
 ## Usage
 
 ### 1. Create ```.env``` with ```JWT_SECRET="..."```
@@ -118,15 +118,19 @@ matcher: [
 ### 4. Login / Logout
 
 #### 4.1 Server Side
+##### Consider calling validateCsrfToken(); at login or other protected actions.
 
 ```typescript
 "use server";
 
-import { createSession } from 'authlite';
+import { createSession, validateCsrfToken } from 'authlite';
 import { UserType } from '...';
 
-export const loginFunction = async (...) => {
+export const loginAction = async (...) => {
     ...
+    // const result = await validateCsrfToken();
+    // If (!result) return null;
+
     // Consider keeping it simple and create more specific actions
     const user: UserType = {...}
     
