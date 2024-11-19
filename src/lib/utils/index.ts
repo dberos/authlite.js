@@ -46,30 +46,3 @@ export const generateCsrfToken = async (): Promise<string> => {
     // Convert to hexadecimal string
     return Array.from(randomValues).map(byte => byte.toString(16).padStart(2, '0')).join('');
 };
-
-/**
- * onClick function to login with GitHub
- */
-export const loginWithGitHub = (): void => {
-    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID as string;
-    const redirectUri = process.env.NEXT_PUBLIC_GITHUB_REDIRECT_URI as string;
-    const scope = 'user'; 
-
-    const githubAuthURL = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
-    
-    window.location.href = githubAuthURL;
-}
-
-/**
- * onClick function to login with Google
- */
-export const loginWithGoogle = ():void => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID as string;
-    const redirectUri = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI as string;
-    const scope = 'email profile';
-    const state = 'random_state_string';
-
-    const googleAuthURL = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${state}`;
-
-    window.location.href = googleAuthURL;
-}

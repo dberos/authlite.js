@@ -1,6 +1,11 @@
 # authlite.js
 Lite authentication system for [Next.js](https://nextjs.org/).
-**authlite.js** is designed to simplify the authentication process fitting personal project needs, but can be used by anyone. Currently maintained for `Next.js v15`.
+**authlite.js** is designed to simplify the authentication process fitting personal project needs, but can be used by anyone who needs a simple layer of abstraction to their application. Currently maintained for `Next.js v15`.
+
+## Versions
+
+* v1.0.6 Removed OAuth providers as it's not the point of the library.
+
 ## Usage
 
 ### 1. Create ```.env``` with ```JWT_SECRET="..."```
@@ -118,19 +123,15 @@ matcher: [
 ### 4. Login / Logout
 
 #### 4.1 Server Side
-##### Consider calling validateCsrfToken(); at login or other protected actions.
 
 ```typescript
 "use server";
 
-import { createSession, validateCsrfToken } from 'authlite';
+import { createSession } from 'authlite';
 import { UserType } from '...';
 
 export const loginAction = async (...) => {
     ...
-    // const result = await validateCsrfToken();
-    // If (!result) return null;
-
     // Consider keeping it simple and create more specific actions
     const user: UserType = {...}
     
@@ -235,147 +236,87 @@ const verifiedToken = await verifyJwt(token, JWT_SECRET);
 ...
 ```
 
-### 6. For GitHub provider:
+## Security
 
-#### 6.1 Create GitHub OAuth app with ```Authorization callback URL``` ```...auth/github/callback```
+There is no CSP or CORS configuration. Consider calling `validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues. For api routes:
 
-#### 6.2 Add to ```.env``` 
-
-```bash
-NEXT_PUBLIC_GITHUB_CLIENT_ID="..."
-GITHUB_CLIENT_SECRET="..."
-NEXT_PUBLIC_GITHUB_REDIRECT_URI="..."
-```
-#### 6.3 Create ```app/auth/github/callback/page.tsx```
+#### route.ts
 
 ```typescript
-'use client';
+import { NextRequest, NextResponse } from "next/server";
 
-import { useEffect, use, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { authenticateWithGitHub, createSession, useAuth } from 'authlite';
-import { UserType } from '...';
+export const POST = async (request: NextRequest) => {
+    ...
+    const headers = new Headers(request.headers);
 
-export default function AuthCallbackPage({searchParams}: { searchParams: Promise<{ [key: string]: string | null }> }) {
-    const { code } = use(searchParams);
-    const router = useRouter();
-    const { onLogin } = useAuth();
+    const tokenHeader = headers.get('X-Csrf-Token');
+    const tokenCookie = headers.get('Cookie');
 
-    // Skip unnecessary dependency that can cause error
-    const onLoginRef = useRef(onLogin);
+    // Check if the CSRF tokens match
+    if (tokenHeader !== tokenCookie) {
+        return NextResponse.json(
+            { success: false, message: 'CSRF token mismatch.' },
+            { status: 403 }
+        );
+    }
 
-    useEffect(() => {
-        const handleAuth = async () => {
-            if (!code) {
-                router.push('...');
-                return;
-            }
+    // If tokens match, respond with success
+    return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
+};
+```
 
-            const { user } = await authenticateWithGitHub(code);
-            if (user) {
-                const userObj: UserType = { ... }
-                const success = await createSession(userObj);
-                if (success) {
-                    await onLoginRef.current();
-                    router.push('...');
-                }
-                else {
-                    router.push('...');
-                }
-            }
-            else {
-                router.push('...');
-            }
-            
+#### protected-server-action.ts
+
+```typescript
+"use server";
+
+import { cookies, headers } from "next/headers";
+
+export const protectedAction = async () => {
+    ...
+    try {
+
+        // Get headers and cookies
+        const headersList = await headers();
+        const cookieStore = await cookies();
+
+        // Get csrf from cookie
+        const tokenCookie = cookieStore.get('csrfToken')?.value;
+        // Get csrf from header
+        const tokenHeader = headersList.get('X-Csrf-Token');
+        if (!tokenCookie || !tokenHeader) throw new Error('Not valid cookie or header');
+        const response = await fetch('[YOUR_FULL_DOMAIN]', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': tokenCookie,
+                'X-Csrf-Token': tokenHeader
+            },
+        });
+        // Get response
+        const result = await response.json();
+
+        if (response.ok) 
+            {
+            console.log(result.message);
+            return result;
+        } 
+        else {
+            console.error(result.message);
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+    } 
+    catch (error) {
+        console.error('Error validating CSRF or making API request:', error);
+        return {
+            success: false,
+            message: 'An unknown error occurred.',
         };
-        handleAuth();
-    }, [code, router]);
+    }
+};
 
-    // Your HTML
-    return <h1>Authenticating...</h1>;
-}
 ```
 
-#### 6.4 On your Login Page
+## OAuth
 
-```typescript
-"use client";
-import { loginWithGitHub } from 'authlite';
-...
-<button onClick={loginWithGitHub}>
-    Login with GitHub
-</button>
-```
-
-### 7. For Google provider:
-
-#### 7.1 Create Google OAuth app with ```Authorized redirect URIs``` ```...auth/google/callback```
-
-#### 7.2 Add to ```.env```
-
-```bash
-NEXT_PUBLIC_GOOGLE_CLIENT_ID="..."
-GOOGLE_CLIENT_SECRET="..."
-NEXT_PUBLIC_GOOGLE_REDIRECT_URI="..."
-```
-
-#### 7.3 Create app/auth/google/callback/page.tsx
-
-```typescript
-'use client';
-
-import { useEffect, use, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { authenticateWithGoogle, createSession, useAuth } from 'authlite';
-import { UserType } from  '...';
-
-export default function AuthCallbackPage({searchParams}: { searchParams: Promise<{ [key: string]: string | null }> }) {
-    const { code } = use(searchParams);
-    const router = useRouter();
-    const { onLogin } = useAuth();
-
-    // Skip unnecessary dependency that can cause error
-    const onLoginRef = useRef(onLogin);
-
-    useEffect(() => {
-        const handleAuth = async () => {
-            if (!code) {
-                router.push('...');
-                return;
-            }
-
-            const { user } = await authenticateWithGoogle(code);
-            if (user) {
-                const userObj: UserType = { ... }
-                const success = await createSession(userObj);
-                if (success) {
-                    await onLoginRef.current();
-                    router.push('...');
-                }
-                else {
-                    router.push('...');
-                }
-            }
-            else {
-                router.push('...');
-            }
-            
-        };
-        handleAuth();
-    }, [code, router]);
-
-    // Your HTML
-    return <h1>Authenticating...</h1>;
-}
-```
-
-#### 7.4 On your Login Page
-
-```typescript
-"use client";
-import { loginWithGoogle } from 'authlite';
-...
-<button onClick={loginWithGoogle}>
-    Login with Google
-</button>
-```
+For [GitHub](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps) , [Google](https://developers.google.com/identity/protocols/oauth2/javascript-implicit-flow) etc. providers don't forget to call server or client side on callback page `createSession` with your user object and on client side `onLogin`.

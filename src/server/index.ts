@@ -32,7 +32,7 @@ export const AuthMiddlewareUtils = async (request: NextRequest, callback?: Middl
 /**
  * Server action to refresh current session if available
  * @async
- * @param request NextReques
+ * @param request NextRequest
  * @param response NextResponse
  * @returns refreshed response
  * @throws Error if csrf header doesn't match
@@ -49,7 +49,7 @@ export const refreshSession = async (request: NextRequest): Promise<NextResponse
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 60,
+        maxAge: 60 * 60 * 24,
         path: '/',
     });
 
@@ -71,7 +71,7 @@ export const refreshSession = async (request: NextRequest): Promise<NextResponse
     response.cookies.set('session', newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 90,
         path: '/',
     });
@@ -113,7 +113,7 @@ export const createSession = async (user: object): Promise<boolean> => {
         cookieStore.set('session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 60 * 60 * 24 * 90,
             path: '/',
         });
@@ -178,204 +178,4 @@ export const getJwt = async (): Promise<{ jwt: string | null }> => {
 export const deleteSession = async () => {
     const cookieStore = await cookies();
     cookieStore?.delete('session');
-}
-
-/**
- * Fetches OAuth GitHub access token
- * @async
- * @param code OAuth search param code
- * @returns access token
- */
-export const getGitHubAccessToken = async (code: string): Promise<{ data: any }> => {
-    // Get the environment variables
-    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
-    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-
-    // Check if any of the environment variables are missing
-    if (!clientId || !clientSecret) {
-        throw new Error('Missing GitHub OAuth environment variables: client_id or client_secret');
-    }
-
-    // Fetch the access token
-    const response = await fetch('https://github.com/login/oauth/access_token', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-        },
-        body: JSON.stringify({
-            client_id: clientId,
-            client_secret: clientSecret,
-            code,
-        }),
-    });
-
-    // Handle possible errors in the response
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`GitHub access token fetch failed: ${errorData.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-
-    // Return the data
-    return { data };
-};
-
-/**
- * Fetches GitHub user
- * @async
- * @param accessToken 
- * @returns GitHub User object
- * @throws Error if fetch fails
- */
-export const getGitHubUser = async (accessToken: string): Promise<{ user: any }> => {
-    // Fetch the user
-    const response = await fetch('https://api.github.com/user', {
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-        },
-    });
-
-    // Check if the response is successful
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`GitHub user fetch failed: ${errorData.message || 'Unknown error'}`);
-    }
-
-    const user = await response.json();
-
-    // Return the user data
-    return { user };
-};
-
-/**
- * Authentication server action with GitHub
- * @async
- * @param code OAuth search param code
- * @returns GitHub user object
- */
-export const authenticateWithGitHub = async (code: string | null): Promise<{ user: any }> => {
-    // Ensure code is available
-    if (!code) {
-        return { user: null };
-    }
-    try {
-        // Fetch the access token
-        const { data } = await getGitHubAccessToken(code);
-        const access_token = data.access_token;
-        // Fetch the user with the access token
-        const { user } = await getGitHubUser(access_token);
-        // Return the user
-        return { user };
-    } 
-    catch (error) {
-        console.error("GitHub authentication failed:", error);
-        return { user: null };
-    }
-}
-
-/**
- * Fetches OAuth Google access token
- * @async
- * @param code  OAuth search param code
- * @returns access token
- */
-export const getGoogleAccessToken = async (code: string): Promise<{ data: any }> => {
-    // Get the environment variables
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID as string;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET as string;
-    const redirectUri = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI as string;
-
-    // Check if any of the environment variables are missing
-    if (!clientId || !clientSecret || !redirectUri) {
-        throw new Error('Missing Google OAuth environment variables');
-    }
-
-    const tokenUrl = 'https://oauth2.googleapis.com/token';
-
-    // Prepare JSON payload
-    const body = {
-        code: code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-    };
-
-    // Fetch the access token
-    const response = await fetch(tokenUrl, {
-        method: 'POST',
-        body: JSON.stringify(body),
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
-
-    // Check if the response is successful
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Google access token fetch failed: ${errorData.error || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-
-    // Return the data
-    return { data };
-};
-
-/**
- * Fetches Google user
- * @async
- * @param accessToken 
- * @returns Google user object
- * @throws Error if fetch fails
- */
-export const getGoogleUser = async (accessToken: string): Promise<{ user: any }> => {
-    // Fetch the user
-    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-        },
-    });
-
-    // Check if the response is successful
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Google user fetch failed: ${errorData.error || 'Unknown error'}`);
-    }
-
-    const user = await response.json();
-
-    // Return the user data
-    return { user };
-};
-
-/**
- * Authentication server action with Google
- * @async
- * @param code OAuth search param code
- * @returns Google user object
- */
-export const authenticateWithGoogle = async (code: string | null): Promise<{ user: any }> => {
-    if (!code) {
-        return { user: null };
-    }
-
-    try {
-        // Get Google Access Token
-        const { data } = await getGoogleAccessToken(code);
-        const access_token = data.access_token;
-
-        // Get Google User
-        const { user } = await getGoogleUser(access_token);
-
-        // Return user object
-        return { user };
-    } 
-    catch (error) {
-        console.error("Google authentication failed:", error);
-        return { user: null };
-    }
 }

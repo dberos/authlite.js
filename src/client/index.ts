@@ -43,8 +43,8 @@ export const AuthProvider = <T>({ children }: { children: React.ReactNode }) => 
      */
     const onLogin = async (): Promise<void> => {
         try {
-            const { session } = await getSession<T>(); // Fetch user session
-            setSession(session); // Set user object
+            const { session } = await getSession<T>();
+            setSession(session);
         }
         catch (error) {
             console.error("Login error:", error);
@@ -58,7 +58,7 @@ export const AuthProvider = <T>({ children }: { children: React.ReactNode }) => 
     const onLogout = async (): Promise<void> => {
         try {
             await deleteSession();
-            setSession(null); // Clear user object
+            setSession(null);
         }
         catch (error) {
             console.error("Logout error:", error);
