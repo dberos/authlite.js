@@ -5,6 +5,7 @@ export { decodeJwt } from './lib/jwt';
 export { AuthMiddleware } from './lib/utils';
 export { protect } from './lib/utils';
 
+export { verifyCsrfToken } from './server';
 export { validateCsrfToken } from './server';
 export { createSession } from './server';
 export { getSession } from './server';

@@ -4,11 +4,16 @@ Lite authentication system for [Next.js](https://nextjs.org/).
 
 ## Versions
 
+* v1.0.8 Added env variable TOKEN_SECRET and modified csrf token generation and validation.
 * v1.0.6 Removed OAuth providers as it's not the point of the library.
 
 ## Usage
 
-### 1. Create ```.env``` with ```JWT_SECRET="..."```
+### 1. Create ```.env``` with:
+```bash
+JWT_SECRET="..."
+TOKEN_SECRET="..."
+```
 
 ### 2. Wrap root layout with AuthProvider
 
@@ -244,6 +249,7 @@ There is no CSP or CORS configuration. Consider calling `validateCsrfToken()` at
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
+import { verifyCsrfToken } from 'authlite';
 
 export const POST = async (request: NextRequest) => {
     ...
@@ -252,16 +258,19 @@ export const POST = async (request: NextRequest) => {
     const tokenHeader = headers.get('X-Csrf-Token');
     const tokenCookie = headers.get('Cookie');
 
-    // Check if the CSRF tokens match
-    if (tokenHeader !== tokenCookie) {
-        return NextResponse.json(
-            { success: false, message: 'CSRF token mismatch.' },
-            { status: 403 }
-        );
-    }
+    // Verify the tokens
+    const isValidHeader = await verifyCsrfToken(tokenHeader ?? "");
+    const isValidCookie = await verifyCsrfToken(tokenCookie ?? "");
 
-    // If tokens match, respond with success
-    return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
+    if (isValidHeader && isValidCookie) {
+        if (tokenHeader === tokenCookie) {
+            return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
+        }   
+    }
+    return NextResponse.json(
+        { success: false, message: 'CSRF token mismatch.' },
+        { status: 403 }
+    );
 };
 ```
 

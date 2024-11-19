@@ -3,11 +3,15 @@
 import { cookies, headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
-import { generateCsrfToken, MiddlewareCallbackType } from "../lib/utils";
+import { hexToUint8Array, MiddlewareCallbackType, uint8ArrayToHex } from "../lib/utils";
 
-const secret = process.env.JWT_SECRET as string;
-if (!secret) throw new Error('No JWT_SECRET provided');
-const JWT_SECRET = new TextEncoder().encode(secret);
+const jwtSecret = process.env.JWT_SECRET as string;
+if (!jwtSecret) throw new Error('No JWT_SECRET provided');
+const JWT_SECRET = new TextEncoder().encode(jwtSecret);
+
+const csrfSecret = process.env.JWT_SECRET as string;
+if (!csrfSecret) throw new Error('No TOKEN_SECRET provided');
+const TOKEN_SECRET = new TextEncoder().encode(csrfSecret);
 
 export const AuthMiddlewareUtils = async (request: NextRequest, callback?: MiddlewareCallbackType): Promise<NextResponse> => {
     // Refresh the session
@@ -80,6 +84,60 @@ export const refreshSession = async (request: NextRequest): Promise<NextResponse
 };
 
 /**
+ * Generates a csrf token with a secret
+ * @async
+ * @returns csrf token 
+ */
+const generateCsrfToken = async (): Promise<string> => {
+    // Generate random data
+    const randomData = crypto.getRandomValues(new Uint8Array(32));
+    // Import a cryptographic key
+    const key = await crypto.subtle.importKey(
+        "raw",
+        TOKEN_SECRET,
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    // Sign the key
+    const signature = await crypto.subtle.sign("HMAC", key, randomData);
+
+    // Concatenate random data and signature
+    return uint8ArrayToHex(randomData) + "." + uint8ArrayToHex(new Uint8Array(signature));
+};
+
+/**
+ * Verifying a csrf token with a secret
+ * @async
+ * @param token your csrf token
+ * @returns Boolean if verified
+ */
+export const verifyCsrfToken = async (token: string): Promise<boolean> => {
+    // Split the token into random data and the HMAC signature
+    const [randomHex, signatureHex] = token.split(".");
+    if (!randomHex || !signatureHex) {
+        return false;
+    }
+
+    const randomData = hexToUint8Array(randomHex);
+    const signature = hexToUint8Array(signatureHex);
+
+    const key = await crypto.subtle.importKey(
+        "raw",
+        TOKEN_SECRET,
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"]
+    );
+
+    // Verify the signature matches the HMAC of the random data
+    const isValid = await crypto.subtle.verify("HMAC", key, signature, randomData);
+
+    return isValid;
+};
+
+/**
  * Validates the csrf token found in cookies and header
  * @async
  * @returns Boolean 
@@ -94,8 +152,15 @@ export const validateCsrfToken = async (): Promise<boolean> => {
     const cookieToken = cookieStore.get('csrfToken')?.value;
     const headerToken = headersList.get('X-Csrf-Token');
 
-    // Check if they match
-    return cookieToken === headerToken;
+    // Verify the tokens
+    const isValidCookie = await verifyCsrfToken(cookieToken ?? "");
+    const isValidHeader = await verifyCsrfToken(headerToken ?? "");
+
+    if (isValidCookie && isValidHeader) {
+        return cookieToken === headerToken;
+    }
+
+    return false;
 }
 
 /**

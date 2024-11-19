@@ -39,10 +39,12 @@ export const protect = async (request: NextRequest, isProtectedRoute: string[], 
     }
 };
 
-export const generateCsrfToken = async (): Promise<string> => {
-    // Generate 32 bytes of random data
-    const randomValues = crypto.getRandomValues(new Uint8Array(32));
-    
-    // Convert to hexadecimal string
-    return Array.from(randomValues).map(byte => byte.toString(16).padStart(2, '0')).join('');
-};
+// Convert a Uint8Array to a hex string
+export const uint8ArrayToHex = (arr: Uint8Array): string => {
+    return Array.from(arr).map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// Convert a hex to a Uint8Array
+export const hexToUint8Array = (hex: string): Uint8Array => {
+    return new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+}
