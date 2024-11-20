@@ -2,6 +2,12 @@
 Lite authentication system for [Next.js](https://nextjs.org/).
 **authlite.js** is designed to simplify the authentication process fitting personal project needs, but can be used by anyone who needs a simple layer of abstraction to their application. Currently maintained for `Next.js v15`.
 
+## Installation
+
+```bash
+npm install authlite
+```
+
 ## Versions
 
 * v1.0.8 Added env variable TOKEN_SECRET and modified csrf token generation and validation.
@@ -243,7 +249,7 @@ const verifiedToken = await verifyJwt(token, JWT_SECRET);
 
 ## Security
 
-There is no CSP or CORS configuration. Consider calling `validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues. For api routes:
+There is no CSP or CORS configuration. Consider calling `await validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues. For api routes:
 
 #### route.ts
 
@@ -253,16 +259,17 @@ import { verifyCsrfToken } from 'authlite';
 
 export const POST = async (request: NextRequest) => {
     ...
+    // Get headers
     const headers = new Headers(request.headers);
 
-    const tokenHeader = headers.get('X-Csrf-Token');
-    const tokenCookie = headers.get('Cookie');
+    const tokenCookie = headers.get('Cookie') || "";
+    const tokenHeader = headers.get('X-Csrf-Token') || "";
 
     // Verify the tokens
-    const isValidHeader = await verifyCsrfToken(tokenHeader ?? "");
-    const isValidCookie = await verifyCsrfToken(tokenCookie ?? "");
+    const isValidCookie = await verifyCsrfToken(tokenCookie);
+    const isValidHeader = await verifyCsrfToken(tokenHeader);
 
-    if (isValidHeader && isValidCookie) {
+    if (isValidCookie && isValidHeader) {
         if (tokenHeader === tokenCookie) {
             return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
         }   
@@ -271,7 +278,7 @@ export const POST = async (request: NextRequest) => {
         { success: false, message: 'CSRF token mismatch.' },
         { status: 403 }
     );
-};
+}
 ```
 
 #### protected-server-action.ts
@@ -284,16 +291,19 @@ import { cookies, headers } from "next/headers";
 export const protectedAction = async () => {
     ...
     try {
-
-        // Get headers and cookies
-        const headersList = await headers();
+        // Get cookies and headers
         const cookieStore = await cookies();
+        const headersList = await headers();
 
-        // Get csrf from cookie
+        // Get csrf token from cookie
         const tokenCookie = cookieStore.get('csrfToken')?.value;
-        // Get csrf from header
+        // Get csrf token from header
         const tokenHeader = headersList.get('X-Csrf-Token');
+
+        // Verify they exist
         if (!tokenCookie || !tokenHeader) throw new Error('Not valid cookie or header');
+
+        // Your fetch
         const response = await fetch('[YOUR_FULL_DOMAIN]', {
             method: 'POST',
             headers: {
@@ -302,11 +312,11 @@ export const protectedAction = async () => {
                 'X-Csrf-Token': tokenHeader
             },
         });
+
         // Get response
         const result = await response.json();
 
-        if (response.ok) 
-            {
+        if (response.ok) {
             console.log(result.message);
             return result;
         } 
@@ -322,10 +332,10 @@ export const protectedAction = async () => {
             message: 'An unknown error occurred.',
         };
     }
-};
+}
 
 ```
 
 ## OAuth
 
-For [GitHub](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps) , [Google](https://developers.google.com/identity/protocols/oauth2/javascript-implicit-flow) etc. providers don't forget to call server or client side on callback page `createSession` with your user object and on client side `onLogin`.
+For [GitHub](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps) , [Google](https://developers.google.com/identity/protocols/oauth2/javascript-implicit-flow) etc. providers don't forget to call server or client side on callback page `await createSession(user)` with your user object and on client side `await onLogin()`.
