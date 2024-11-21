@@ -3,13 +3,14 @@
 import { cookies, headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
-import { hexToUint8Array, MiddlewareCallbackType, uint8ArrayToHex } from "../lib/utils";
+import { MiddlewareCallbackType } from "../lib/utils";
+import { generateCsrfToken, verifyCsrfToken } from "../lib/csrf-token";
 
 const jwtSecret = process.env.JWT_SECRET as string;
 if (!jwtSecret) throw new Error('No JWT_SECRET provided');
 const JWT_SECRET = new TextEncoder().encode(jwtSecret);
 
-const csrfSecret = process.env.JWT_SECRET as string;
+const csrfSecret = process.env.TOKEN_SECRET as string;
 if (!csrfSecret) throw new Error('No TOKEN_SECRET provided');
 const TOKEN_SECRET = new TextEncoder().encode(csrfSecret);
 
@@ -43,7 +44,7 @@ export const AuthMiddlewareUtils = async (request: NextRequest, callback?: Middl
  */
 export const refreshSession = async (request: NextRequest): Promise<NextResponse<unknown>> => {
     // Generate a csrf token
-    const csrfToken = await generateCsrfToken();
+    const csrfToken = await generateCsrfToken('1m', TOKEN_SECRET);
     // Generate a response
     const response = NextResponse.next();
     // Set the response header
@@ -84,60 +85,6 @@ export const refreshSession = async (request: NextRequest): Promise<NextResponse
 };
 
 /**
- * Generates a csrf token with a secret
- * @async
- * @returns csrf token 
- */
-const generateCsrfToken = async (): Promise<string> => {
-    // Generate random data
-    const randomData = crypto.getRandomValues(new Uint8Array(32));
-    // Import a cryptographic key
-    const key = await crypto.subtle.importKey(
-        "raw",
-        TOKEN_SECRET,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-    );
-
-    // Sign the key
-    const signature = await crypto.subtle.sign("HMAC", key, randomData);
-
-    // Concatenate random data and signature
-    return uint8ArrayToHex(randomData) + "." + uint8ArrayToHex(new Uint8Array(signature));
-};
-
-/**
- * Verifying a csrf token with a secret
- * @async
- * @param token your csrf token
- * @returns Boolean if verified
- */
-export const verifyCsrfToken = async (token: string): Promise<boolean> => {
-    // Split the token into random data and the HMAC signature
-    const [randomHex, signatureHex] = token.split(".");
-    if (!randomHex || !signatureHex) {
-        return false;
-    }
-
-    const randomData = hexToUint8Array(randomHex);
-    const signature = hexToUint8Array(signatureHex);
-
-    const key = await crypto.subtle.importKey(
-        "raw",
-        TOKEN_SECRET,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["verify"]
-    );
-
-    // Verify the signature matches the HMAC of the random data
-    const isValid = await crypto.subtle.verify("HMAC", key, signature, randomData);
-
-    return isValid;
-};
-
-/**
  * Validates the csrf token found in cookies and header
  * @async
  * @returns Boolean 
@@ -153,8 +100,8 @@ export const validateCsrfToken = async (): Promise<boolean> => {
     const headerToken = headersList.get('X-Csrf-Token');
 
     // Verify the tokens
-    const isValidCookie = await verifyCsrfToken(cookieToken ?? "");
-    const isValidHeader = await verifyCsrfToken(headerToken ?? "");
+    const isValidCookie = cookieToken ? await verifyCsrfToken(cookieToken, TOKEN_SECRET) : false;
+    const isValidHeader = headerToken ? await verifyCsrfToken(headerToken, TOKEN_SECRET) : false;
 
     if (isValidCookie && isValidHeader) {
         return cookieToken === headerToken;
@@ -223,9 +170,9 @@ export const authenticateSession = async <T = any>(): Promise<{ session: T | nul
 }
 
 /**
- * Server action to fetch the jwt
+ * Server action to fetch the jwt from cookies
  * @async
- * @returns Jwt 
+ * @returns jwt 
  */
 export const getJwt = async (): Promise<{ jwt: string | null }> => {
     const cookieStore = await cookies();
@@ -234,6 +181,20 @@ export const getJwt = async (): Promise<{ jwt: string | null }> => {
         return { jwt };
     }
     return { jwt: null };
+}
+
+/**
+ * Server action to fetch X-Csrf-Token header
+ * @async
+ * @returns csrfToken
+ */
+export const getCsrfToken = async (): Promise<{ csrfToken: string | null }> => {
+    const headersList = await headers();
+    const csrfToken = headersList.get('X-Csrf-Token');
+    if (csrfToken) {
+        return { csrfToken }
+    }
+    return { csrfToken: null };
 }
 
 /**

@@ -10,6 +10,7 @@ npm install authlite
 
 ## Versions
 
+* v1.0.10 Added expiration to csrf token
 * v1.0.8 Added env variable TOKEN_SECRET and modified csrf token generation and validation.
 * v1.0.6 Removed OAuth providers as it's not the point of the library.
 
@@ -220,36 +221,87 @@ const { session } = useAuth<UserType>();
 
 #### 5.3 For Api Routes
 
-##### 5.3.1 Client Side fetch
+##### route.ts
 
 ```typescript
-import { getJwt } from 'authlite';
+import { NextRequest, NextResponse } from "next/server";
+import { verifyJwt } from 'authlite';
 
-...
-const { jwt } = await getJwt();
-const response = await fetch(...);
-...
+export const POST = async (request: NextRequest) => {
+    ...
+    // Your secret
+    const jwtSecret = process.env.JWT_SECRET as string;
+    const JWT_SECRET = new TextEncoder().encode(jwtSecret);
+
+    // Get headers
+    const headers = new Headers(request.headers);
+    const jwtHeader = headers.get('Authorization') || "";
+
+    // Get token
+    const token = jwtHeader.split(' ')[1];
+
+    // Verify the token
+    const verifiedToken = await verifyJwt(token, JWT_SECRET);
+    if (verifiedToken) {
+        return NextResponse.json({ success: true, message: 'Jwt validated successfully.' });
+    }
+    
+    return NextResponse.json(
+        { success: false, message: 'Invalid Jwt.' },
+        { status: 403 }
+    );
+}
 ```
 
-##### 5.3.2 route.ts
+##### protected-action.ts
 
 ```typescript
-import { verifyJwt } from 'authlite'
+"use server";
 
-....
-const secret = process.env.JWT_SECRET as string;
-const JWT_SECRET = new TextEncoder().encode(secret);
+import { getJwt } from "authlite";
 
-const header = req.headers.get(...);
-const token = header.split(' ')[1];
+export const protectedAction = async () => {
+    ...
+    try {
+        // Get jwt
+        const { jwt } = await getJwt();
+        if (!jwt) throw new Error('Invalid jwt');
 
-const verifiedToken = await verifyJwt(token, JWT_SECRET);
-...
+        // Your fetch
+        const response = await fetch('[YOUR_FULL_DOMAIN]', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${jwt}`
+            },
+        });
+
+        // Get response
+        const result = await response.json();
+
+        if (response.ok) {
+            console.log(result.message);
+            return result;
+        } 
+        else {
+            console.error(result.message);
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+    } 
+    catch (error) {
+        console.error('Error validating jwt or making API request:', error);
+        return {
+            success: false,
+            message: 'An unknown error occurred.',
+        };
+    }
+}
+
 ```
 
 ## Security
 
-There is no CSP or CORS configuration. Consider calling `await validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues. For api routes:
+There is no CSP or CORS configuration. Consider calling `await validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues and call api from a server action. For api routes:
 
 #### route.ts
 
@@ -259,57 +311,48 @@ import { verifyCsrfToken } from 'authlite';
 
 export const POST = async (request: NextRequest) => {
     ...
+    // Your secret
+    const tokenSecret = process.env.TOKEN_SECRET as string;
+    const TOKEN_SECRET = new TextEncoder().encode(tokenSecret);
+
     // Get headers
     const headers = new Headers(request.headers);
-
-    const tokenCookie = headers.get('Cookie') || "";
     const tokenHeader = headers.get('X-Csrf-Token') || "";
 
-    // Verify the tokens
-    const isValidCookie = await verifyCsrfToken(tokenCookie);
-    const isValidHeader = await verifyCsrfToken(tokenHeader);
-
-    if (isValidCookie && isValidHeader) {
-        if (tokenHeader === tokenCookie) {
-            return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
-        }   
+    // Verify the token
+    const isValidHeader = await verifyCsrfToken(tokenHeader, TOKEN_SECRET);
+    if (isValidHeader) {
+        return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
     }
+    
     return NextResponse.json(
-        { success: false, message: 'CSRF token mismatch.' },
+        { success: false, message: 'Invalid Csrf Token' },
         { status: 403 }
     );
 }
 ```
 
-#### protected-server-action.ts
+#### protected-action.ts
 
 ```typescript
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { getCsrfToken } from "authlite";
 
 export const protectedAction = async () => {
     ...
     try {
-        // Get cookies and headers
-        const cookieStore = await cookies();
-        const headersList = await headers();
-
-        // Get csrf token from cookie
-        const tokenCookie = cookieStore.get('csrfToken')?.value;
-        // Get csrf token from header
-        const tokenHeader = headersList.get('X-Csrf-Token');
-
-        // Verify they exist
-        if (!tokenCookie || !tokenHeader) throw new Error('Not valid cookie or header');
+        // Get csrf token
+        const { csrfToken } = await getCsrfToken();
+        // Verify the token exists
+        if (!csrfToken) throw new Error('No csrf token found');
 
         // Your fetch
         const response = await fetch('[YOUR_FULL_DOMAIN]', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Cookie': tokenCookie,
-                'X-Csrf-Token': tokenHeader
+                'X-Csrf-Token': csrfToken
             },
         });
 
@@ -333,7 +376,6 @@ export const protectedAction = async () => {
         };
     }
 }
-
 ```
 
 ## OAuth

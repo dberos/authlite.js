@@ -6,3 +6,7 @@ module.exports = {
     },
     testPathIgnorePatterns: ["<rootDir>/dist/"],
     };
+    process.env = Object.assign(process.env, {
+        JWT_SECRET: 'test-secret-key',
+        TOKEN_SECRET: 'test-secret-key'
+      });
