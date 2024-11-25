@@ -2,15 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthMiddlewareUtils } from "../../server";
 
 export type MiddlewareCallbackType = (request: NextRequest) => Promise<void | NextResponse> | void | NextResponse;
+export enum CspEnum {
+    STRICT,
+    RELAXED,
+    NONE
+}
 
 /**
  * Middleware utility function
  * @param callback Optional callback handler to protect routes
  * @returns response
  */
-export const AuthMiddleware = (callback?: MiddlewareCallbackType) => {
+export const AuthMiddleware = (
+    allowedOrigins: string[], 
+    csp: CspEnum, 
+    callback?: MiddlewareCallbackType
+) => {
     return (request: NextRequest): Promise<NextResponse> => {
-        return AuthMiddlewareUtils(request, callback);
+        return AuthMiddlewareUtils(request, allowedOrigins, csp, callback);
     };
 };
 

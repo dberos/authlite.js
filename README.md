@@ -10,6 +10,7 @@ npm install authlite
 
 ## Versions
 
+* v1.0.11 Added CSP and CORS configuration
 * v1.0.10 Added expiration to csrf token
 * v1.0.8 Added env variable TOKEN_SECRET and modified csrf token generation and validation.
 * v1.0.6 Removed OAuth providers as it's not the point of the library.
@@ -36,20 +37,32 @@ import { AuthProvider } from 'authlite';
 #### 3.1 No protected routes
 
 ```typescript
-import { AuthMiddleware } from 'authlite';
+import { AuthMiddleware, CspEnum } from 'authlite';
 
-export default AuthMiddleware();
+const allowedOrigins = ['http://localhost:3000/'];
+
+export default AuthMiddleware(allowedOrigins, CspEnum.STRICT);
 
 export const config = {
-matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
-],
+    matcher: [
+        '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    ],
 }
+
 ```
-#### 3.2 Protect e.g all routes in /profile and /dashboard with redirect to /login
+| Parameters | Options | Description |
+|:-------------|:--------------:|--------------:|
+| allowedOrigins       |   an array of strings with allowed origins     |  CORS configuration         |
+| csp       |   CspEnum.STRICT, CspEnum.RELAXED, CspEnum.NONE     |          CSP configuration |
+
+Add any additional allowed origin urls if needed. For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. If `STRICT` is selected you have to mark every page as async and have some async operation inside to avoid errors. If using `next/image`, it will produce errors due to width and height being injected, but it doesn't cause any problems.
+
+#### 3.2 Protected routes
 
 ```typescript
-import { AuthMiddleware, protect } from 'authlite';
+import { AuthMiddleware, CspEnum, protect } from 'authlite';
+
+const allowedOrigins = ['http://localhost:3000/'];
 
 const isProtectedRoute = [
     '/profile(.*)',
@@ -58,79 +71,115 @@ const isProtectedRoute = [
 
 const redirectUrl = '/login';
 
-export default AuthMiddleware((request) => {
-    return protect(request, isProtectedRoute, redirectUrl);
-});
+export default AuthMiddleware(
+    allowedOrigins, 
+    CspEnum.STRICT, 
+    (request) => {
+        return protect(request, isProtectedRoute, redirectUrl);
+    }
+);
 
 export const config = {
-matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
-],
+    matcher: [
+        '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    ],
 }
 ```
-#### 3.3 Protect all routes except for /login and /register
+This setup protects all routes in /profile and /dashboard. Other useful configurations are:
+
+* To protect all routes except for login and register:
 
 ```typescript
-import { AuthMiddleware, protect } from 'authlite';
-
 const isProtectedRoute = [
     '/((?!login|register)(.*))'
 ];
 
 const redirectUrl = '/login';
-
-export default AuthMiddleware((request) => {
-    return protect(request, isProtectedRoute, redirectUrl);
-});
-
-export const config = {
-matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
-],
-}
 ```
-#### 3.4 Protect all routes except for all /auth routes
+
+* To protect all routes except for all /auth routes:
 
 ```typescript
-import { AuthMiddleware, protect } from 'authlite';
-
 const isProtectedRoute = [
     '^/(?!auth)(.*)'  
 ];
 
 const redirectUrl = '/auth/login';
-
-export default AuthMiddleware((request) => {
-    return protect(request, isProtectedRoute, redirectUrl);
-});
-
-export const config = {
-matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
-],
-}
 ```
-#### 3.5 There are situations where you need to redirect the user to the protected route and want to access searchParams
+
+* To add searchParam `redirect` when you need to redirect the user back to the protected route after login:
 
 ```typescript
-import { AuthMiddleware, protect } from 'authlite';
+protect(request, isProtectedRoute, redirectUrl, true);
+```
 
-const isProtectedRoute = [
-    '/dashboard(.*)'
-];
+A typical `STRICT` csp setup would look like this:
+##### page.tsx
 
-const redirectUrl = '/login';
+```typescript
+import { headers } from "next/headers";
+import Component from "./component";
+import Image from "next/image";
 
-export default AuthMiddleware((request) => {
-    return protect(request, isProtectedRoute, redirectUrl, true);
-});
-
-export const config = {
-matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
-],
+export default async function Home() {
+  // Or simply await headers(); if not planning to use nonce
+  // On any other protected action to avoid csp errors
+  const headersList = await headers();
+  const nonce = headersList.get('X-Nonce') || "";
+  return (
+    <div>
+      <p className="red-box bg-green-500 size-20">
+        Hello World
+      </p>
+      <style nonce={nonce}>
+        {
+          `
+          .red-box {
+            background-color: red;
+          }
+          `
+        }
+      </style>
+      {/* Image will produce error in production */}
+      <Image 
+      src={'./next.svg'}
+      alt="next logo"
+      width={100}
+      height={100}
+      />
+      <Component nonce={nonce}/>
+    </div>
+  );
 }
 ```
+
+##### component.tsx
+
+```typescript
+"use client";
+
+import Script from "next/script";
+
+export const Component = ({nonce}: { nonce: string }) =>  {
+    const handleClick = async () => {
+        console.log('Hello World');
+    }
+    return (
+        <div>
+            <button onClick={handleClick}>
+                click me
+            </button>
+            <Script nonce={nonce} id="123">
+                {`console.log('Hello World!');`}
+            </Script>
+        </div>
+        
+    )
+}
+```
+
+Root layout can be async too.
+
 
 ### 4. Login / Logout
 
@@ -301,7 +350,7 @@ export const protectedAction = async () => {
 
 ## Security
 
-There is no CSP or CORS configuration. Consider calling `await validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues and call api from a server action. For api routes:
+Use in production at your own risk. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider creating a jwt blacklisting table and at every protected request, add a hashed value of the jwt at the table, and don't allow any other protected request with that jwt. Consider calling `await validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues and call api from a server action. For api routes:
 
 #### route.ts
 

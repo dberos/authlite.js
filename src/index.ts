@@ -4,6 +4,7 @@ export { decodeJwt } from './lib/jwt';
 
 export { verifyCsrfToken } from './lib/csrf-token';
 
+export { CspEnum } from './lib/utils';
 export { AuthMiddleware } from './lib/utils';
 export { protect } from './lib/utils';
 

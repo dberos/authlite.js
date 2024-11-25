@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
-import { MiddlewareCallbackType } from "../lib/utils";
+import { CspEnum, MiddlewareCallbackType } from "../lib/utils";
 import { generateCsrfToken, verifyCsrfToken } from "../lib/csrf-token";
 
 const jwtSecret = process.env.JWT_SECRET as string;
@@ -14,9 +14,19 @@ const csrfSecret = process.env.TOKEN_SECRET as string;
 if (!csrfSecret) throw new Error('No TOKEN_SECRET provided');
 const TOKEN_SECRET = new TextEncoder().encode(csrfSecret);
 
-export const AuthMiddlewareUtils = async (request: NextRequest, callback?: MiddlewareCallbackType): Promise<NextResponse> => {
+const corsOptions = {
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Csrf-Token, X-Nonce',
+};
+
+export const AuthMiddlewareUtils = async (
+    request: NextRequest,
+    allowedOrigins: string[],
+    csp: CspEnum,
+     callback?: MiddlewareCallbackType
+): Promise<NextResponse> => {
     // Refresh the session
-    const refreshedResponse = await refreshSession(request);
+    const refreshedResponse = await refreshSession(request, allowedOrigins, csp);
 
     // If the session did not refresh
     if (!refreshedResponse.cookies.get('session')) {
@@ -42,11 +52,173 @@ export const AuthMiddlewareUtils = async (request: NextRequest, callback?: Middl
  * @returns refreshed response
  * @throws Error if csrf header doesn't match
  */
-export const refreshSession = async (request: NextRequest): Promise<NextResponse<unknown>> => {
+export const refreshSession = async (
+    request: NextRequest,
+    allowedOrigins: string[],
+    csp: CspEnum
+): Promise<NextResponse<unknown>> => {
+
+    // Generate a response with csp headers
+    let response = await handleCsp(csp, request);
+
+    // Hanlde cors options
+    response = await handleCors(request, response, allowedOrigins);
+
+    // Hanlde csrf token generation
+    response = await handleCsrfToken(response);
+
+    // Hanlde jwt refresh
+    response = await handleJwt(request, response);
+    
+    // Return the response
+    return response;
+};
+
+/**
+ * 
+ * @param csp The csp type
+ * @param request NextRequest
+ * @returns a generated response with csp headers if provided, for production only
+ */
+const handleCsp = async (csp: CspEnum, request: NextRequest): Promise<NextResponse> => {
+    if (process.env.NODE_ENV === 'development') {
+		return NextResponse.next();
+	}
+    if (csp === CspEnum.STRICT) {
+        const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+        const cspHeader = `
+            default-src 'self';
+            script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+            style-src 'self' 'nonce-${nonce}';
+            img-src 'self' blob: data:;
+            font-src 'self';
+            object-src 'none';
+            base-uri 'self';
+            form-action 'self';
+            frame-ancestors 'none';
+            upgrade-insecure-requests;
+        `
+        // Replace newline characters and spaces
+        const contentSecurityPolicyHeaderValue = cspHeader
+            .replace(/\s{2,}/g, ' ')
+            .trim()
+        
+        const requestHeaders = new Headers(request.headers)
+        requestHeaders.set('X-Nonce', nonce)
+        
+        requestHeaders.set(
+            'Content-Security-Policy',
+            contentSecurityPolicyHeaderValue
+        )
+        
+        const response = NextResponse.next({
+            request: {
+            headers: requestHeaders,
+            },
+        })
+        response.headers.set(
+            'Content-Security-Policy',
+            contentSecurityPolicyHeaderValue
+        )
+        
+        return response;
+    }
+    else if (csp === CspEnum.RELAXED) {
+        const cspHeader = `
+        default-src 'self';
+        script-src 'self' 'unsafe-eval' 'unsafe-inline';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' blob: data:;
+        font-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+        frame-ancestors 'none';
+        upgrade-insecure-requests;
+        `;
+        // Replace newline characters and spaces
+        const contentSecurityPolicyHeaderValue = cspHeader
+            .replace(/\s{2,}/g, ' ')
+            .trim()
+        
+        const requestHeaders = new Headers(request.headers);
+        
+        requestHeaders.set(
+            'Content-Security-Policy',
+            contentSecurityPolicyHeaderValue
+        )
+        
+        const response = NextResponse.next({
+            request: {
+            headers: requestHeaders,
+            },
+        })
+        response.headers.set(
+            'Content-Security-Policy',
+            contentSecurityPolicyHeaderValue
+        )
+        
+        return response;
+    }
+    else {
+        return NextResponse.next();
+    }
+}
+
+/**
+ * 
+ * @param request NextRequest
+ * @param response NextResponse
+ * @param allowedOrigins Array of allowed origins
+ * @returns NextResponse with correct headers
+ */
+const handleCors = async (
+    request: NextRequest, 
+    response: NextResponse,
+    allowedOrigins: string[]
+): Promise<NextResponse> => {
+    // Check the origin from the request
+    const origin = request.headers.get('origin') ?? ''
+    const isAllowedOrigin = allowedOrigins.includes(origin)
+    
+    // Handle preflighted requests
+    const isPreflight = request.method === 'OPTIONS'
+    
+    if (isPreflight) {
+        const preflightHeaders = {
+        ...(isAllowedOrigin && { 'Access-Control-Allow-Origin': origin }),
+        ...corsOptions,
+        }
+        // Create a new JSON response and copy existing headers
+        const jsonResponse = NextResponse.json({}, { headers: preflightHeaders });
+
+        // Copy headers from the original response (if needed)
+        response.headers.forEach((value, key) => {
+            jsonResponse.headers.set(key, value);
+        });
+
+        return jsonResponse;
+    }
+    
+    if (isAllowedOrigin) {
+        response.headers.set('Access-Control-Allow-Origin', origin)
+    }
+    
+    Object.entries(corsOptions).forEach(([key, value]) => {
+        response.headers.set(key, value)
+    })
+    
+    return response;
+}
+
+/**
+ * 
+ * @param response NextReponse
+ * @returns response with csrf token header and cookie
+ */
+const handleCsrfToken = async (response: NextResponse): Promise<NextResponse> => {
     // Generate a csrf token
     const csrfToken = await generateCsrfToken('1m', TOKEN_SECRET);
-    // Generate a response
-    const response = NextResponse.next();
     // Set the response header
     response.headers.set('X-Csrf-Token', csrfToken);
     // Set the response cookie
@@ -57,7 +229,17 @@ export const refreshSession = async (request: NextRequest): Promise<NextResponse
         maxAge: 60 * 60 * 24,
         path: '/',
     });
+    return response;
+}
 
+/**
+ * @async
+ * @param request NextRequest
+ * @param response NextResponse
+ * @throws Error if jwt signature didn't verify
+ * @returns response with jwt cookie if refreshed
+ */
+const handleJwt = async (request: NextRequest, response: NextResponse): Promise<NextResponse> => {
     // Get the session cookie
     const token = request.cookies.get('session')?.value;
     // If no session is available return
@@ -82,7 +264,7 @@ export const refreshSession = async (request: NextRequest): Promise<NextResponse
     });
     // Return the refreshed response
     return response;
-};
+}
 
 /**
  * Validates the csrf token found in cookies and header
