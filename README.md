@@ -10,10 +10,9 @@ npm install authlite
 
 ## Versions
 
-* v1.0.11 Added CSP and CORS configuration
-* v1.0.10 Added expiration to csrf token
-* v1.0.8 Added env variable TOKEN_SECRET and modified csrf token generation and validation.
-* v1.0.6 Removed OAuth providers as it's not the point of the library.
+| Version | Description |
+|:-------------:|:--------------:|
+| v1.0      |   Initial lib     |
 
 ## Usage
 
@@ -41,7 +40,7 @@ import { AuthMiddleware, CspEnum } from 'authlite';
 
 const allowedOrigins = ['http://localhost:3000/'];
 
-export default AuthMiddleware(allowedOrigins, CspEnum.STRICT);
+export default AuthMiddleware(allowedOrigins, CspEnum.NONE);
 
 export const config = {
     matcher: [
@@ -51,7 +50,7 @@ export const config = {
 
 ```
 | Parameters | Options | Description |
-|:-------------|:--------------:|--------------:|
+|:-------------:|:--------------:|:--------------:|
 | allowedOrigins       |   an array of strings with allowed origins     |  CORS configuration         |
 | csp       |   CspEnum.STRICT, CspEnum.RELAXED, CspEnum.NONE     |          CSP configuration |
 
@@ -73,7 +72,7 @@ const redirectUrl = '/login';
 
 export default AuthMiddleware(
     allowedOrigins, 
-    CspEnum.STRICT, 
+    CspEnum.NONE, 
     (request) => {
         return protect(request, isProtectedRoute, redirectUrl);
     }
