@@ -223,11 +223,14 @@ const handleJwt = async (request: NextRequest, response: NextResponse): Promise<
 
     // Decode the token verifying the signature
     const decodedToken = await decodeJwt(token, JWT_SECRET);
-    // If signature didn't verify return error
+    // If signature didn't verify return the response
     if (!decodedToken) {
-        return NextResponse.json({ error: "Failed to verify JWT signature" }, { status: 403 });
+        // Delete the cookie
+        const cookieStore = await cookies();
+        cookieStore?.delete('session');
+        return response;
     }
-    // Create jwt that lasts 1 minute and cookie 90 days
+    // Create jwt that lasts 1 minute and cookie 7 days
     const newToken = await createJwt(decodedToken, '1m', JWT_SECRET);
 
     // Set the new JWT in cookies
@@ -235,7 +238,7 @@ const handleJwt = async (request: NextRequest, response: NextResponse): Promise<
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 90,
+        maxAge: 60 * 60 * 24 * 7,
         path: '/',
     });
     // Return the refreshed response
@@ -250,15 +253,15 @@ const handleJwt = async (request: NextRequest, response: NextResponse): Promise<
  */
 export const createSession = async (user: object): Promise<boolean> => {
     try {
+        // Create jwt that lasts 1 minute and cookie 7 days
         const token = await createJwt(user, '1m', JWT_SECRET);
         
         const cookieStore = await cookies();
-        // Set the session cookie on the response
         cookieStore.set('session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 90,
+            maxAge: 60 * 60 * 24 * 7,
             path: '/',
         });
         return true;

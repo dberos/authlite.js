@@ -35,6 +35,12 @@ export const AuthProvider = <T>({ children }: { children: React.ReactNode }) => 
             }
         };
         findUser();
+        // Run every minute in case there is no logout but session didn't verify
+        // By changing JWT_SECRET
+        // The cookie is deleted in middleware
+        const intervalId = setInterval(findUser, 60000);
+    
+        return () => clearInterval(intervalId);
     }, []);
 
     /**

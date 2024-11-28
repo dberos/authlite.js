@@ -349,7 +349,7 @@ export const protectedAction = async () => {
 
 ## Security
 
-Use in production at your own risk. If a session cookie is stolen, it will infinitely produce new sessions. Always call api routes from a server action. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
+Use in production at your own risk. If a session cookie is stolen, it will infinitely produce new sessions, unless `JWT_SECRET` has changed. Always call api routes from a server action. Consider changing `JWT_SECRET` frequently to invalidate sessions. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
 
 ### csrf token validation
 
