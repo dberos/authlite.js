@@ -349,34 +349,21 @@ export const protectedAction = async () => {
 
 ## Security
 
-Use in production at your own risk. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider creating a jwt blacklisting table and at every protected request, add a hashed value of the jwt at the table, and don't allow any other protected request with that jwt. Consider calling `await validateCsrfToken()` at login or other protected actions. Always opt out api from middleware config to avoid synchronization or other issues and call api from a server action. For api routes:
+Use in production at your own risk. If a session cookie is stolen, it will infinitely produce new sessions. Always call api routes from a server action. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
 
-#### route.ts
+### csrf token validation
+
+#### client-component.tsx
 
 ```typescript
-import { NextRequest, NextResponse } from "next/server";
-import { verifyCsrfToken } from 'authlite';
-
-export const POST = async (request: NextRequest) => {
+import { createCsrfToken } from 'authlite';
+import { protectedAction } from '...''
+...
+const handleSubmit = async () => {
     ...
-    // Your secret
-    const tokenSecret = process.env.TOKEN_SECRET as string;
-    const TOKEN_SECRET = new TextEncoder().encode(tokenSecret);
-
-    // Get headers
-    const headers = new Headers(request.headers);
-    const tokenHeader = headers.get('X-Csrf-Token') || "";
-
-    // Verify the token
-    const isValidHeader = await verifyCsrfToken(tokenHeader, TOKEN_SECRET);
-    if (isValidHeader) {
-        return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
-    }
-    
-    return NextResponse.json(
-        { success: false, message: 'Invalid Csrf Token' },
-        { status: 403 }
-    );
+    const { csrfToken } = await createCsrfToken();
+    ...
+    await protectedAction(csrfToken);
 }
 ```
 
@@ -385,16 +372,23 @@ export const POST = async (request: NextRequest) => {
 ```typescript
 "use server";
 
-import { getCsrfToken } from "authlite";
+import { getCsrfToken, validateCsrfToken } from 'authlite';
 
-export const protectedAction = async () => {
+export const protectedAction = async (clientToken: string) => {
     ...
     try {
-        // Get csrf token
         const { csrfToken } = await getCsrfToken();
+        // For server action only
+        const isValid = await validateCsrfToken(clientToken, csrfToken);
+        ...
+        // Or for api routes
         // Verify the token exists
         if (!csrfToken) throw new Error('No csrf token found');
-
+        
+        // Data for the POST
+        const data = {
+            csrfToken: clientToken
+        }
         // Your fetch
         const response = await fetch('[YOUR_FULL_DOMAIN]', {
             method: 'POST',
@@ -402,6 +396,7 @@ export const protectedAction = async () => {
                 'Content-Type': 'application/json',
                 'X-Csrf-Token': csrfToken
             },
+            body: JSON.stringify(data)
         });
 
         // Get response
@@ -415,7 +410,7 @@ export const protectedAction = async () => {
             console.error(result.message);
             throw new Error(`API request failed with status ${response.status}`);
         }
-    } 
+    }
     catch (error) {
         console.error('Error validating CSRF or making API request:', error);
         return {
@@ -423,6 +418,37 @@ export const protectedAction = async () => {
             message: 'An unknown error occurred.',
         };
     }
+
+}
+
+```
+
+#### route.ts
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+import { validateCsrfToken } from 'authlite';
+
+export const POST = async (request: NextRequest) => {
+    ...
+    // Get headers
+    const headers = new Headers(request.headers);
+    const tokenHeader = headers.get('X-Csrf-Token') || "";
+
+    // Get request body
+    const body = await request.json();
+    const tokenBody = body.csrfToken;
+
+    // Verify the tokens
+    const isValidCsrfToken = await validateCsrfToken(tokenHeader, tokenBody);
+    if (isValidCsrfToken) {
+        return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
+    }
+    
+    return NextResponse.json(
+        { success: false, message: 'Invalid Csrf Token' },
+        { status: 403 }
+    );
 }
 ```
 

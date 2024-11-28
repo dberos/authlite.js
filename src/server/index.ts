@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
 import { CspEnum, MiddlewareCallbackType } from "../lib/utils";
@@ -63,9 +63,6 @@ export const refreshSession = async (
 
     // Hanlde cors options
     response = await handleCors(request, response, allowedOrigins);
-
-    // Hanlde csrf token generation
-    response = await handleCsrfToken(response);
 
     // Hanlde jwt refresh
     response = await handleJwt(request, response);
@@ -212,27 +209,6 @@ const handleCors = async (
 }
 
 /**
- * 
- * @param response NextReponse
- * @returns response with csrf token header and cookie
- */
-const handleCsrfToken = async (response: NextResponse): Promise<NextResponse> => {
-    // Generate a csrf token
-    const csrfToken = await generateCsrfToken('1m', TOKEN_SECRET);
-    // Set the response header
-    response.headers.set('X-Csrf-Token', csrfToken);
-    // Set the response cookie
-    response.cookies.set('csrfToken', csrfToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24,
-        path: '/',
-    });
-    return response;
-}
-
-/**
  * @async
  * @param request NextRequest
  * @param response NextResponse
@@ -264,32 +240,6 @@ const handleJwt = async (request: NextRequest, response: NextResponse): Promise<
     });
     // Return the refreshed response
     return response;
-}
-
-/**
- * Validates the csrf token found in cookies and header
- * @async
- * @returns Boolean 
- */
-export const validateCsrfToken = async (): Promise<boolean> => {
-    // Get the cookies
-    const cookieStore = await cookies();
-    // Get the headers
-    const headersList = await headers();
-
-    // Get the values from cookie and header
-    const cookieToken = cookieStore.get('csrfToken')?.value;
-    const headerToken = headersList.get('X-Csrf-Token');
-
-    // Verify the tokens
-    const isValidCookie = cookieToken ? await verifyCsrfToken(cookieToken, TOKEN_SECRET) : false;
-    const isValidHeader = headerToken ? await verifyCsrfToken(headerToken, TOKEN_SECRET) : false;
-
-    if (isValidCookie && isValidHeader) {
-        return cookieToken === headerToken;
-    }
-
-    return false;
 }
 
 /**
@@ -352,6 +302,15 @@ export const authenticateSession = async <T = any>(): Promise<{ session: T | nul
 }
 
 /**
+ * Server action to delete current session
+ * @async
+ */
+export const deleteSession = async () => {
+    const cookieStore = await cookies();
+    cookieStore?.delete('session');
+}
+
+/**
  * Server action to fetch the jwt from cookies
  * @async
  * @returns jwt 
@@ -366,24 +325,46 @@ export const getJwt = async (): Promise<{ jwt: string | null }> => {
 }
 
 /**
- * Server action to fetch X-Csrf-Token header
- * @async
- * @returns csrfToken
+ * Server action to be called at client to generate and get a csrf token
+ * @returns the generated token
  */
-export const getCsrfToken = async (): Promise<{ csrfToken: string | null }> => {
-    const headersList = await headers();
-    const csrfToken = headersList.get('X-Csrf-Token');
-    if (csrfToken) {
-        return { csrfToken }
-    }
-    return { csrfToken: null };
+export const createCsrfToken = async (): Promise<{ csrfToken: string }> => {
+    const cookieStore = await cookies();
+    const csrfToken = await generateCsrfToken('1m', TOKEN_SECRET);
+    cookieStore.set('token', csrfToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 30,
+        path: '/',
+    });
+    return { csrfToken }
 }
 
 /**
- * Server action to delete current session
+ * Server action to fetch csrf token
  * @async
+ * @deletes csrf token cookie
+ * @returns csrfToken
  */
-export const deleteSession = async () => {
+export const getCsrfToken = async (): Promise<{ csrfToken: string | null }> => {
     const cookieStore = await cookies();
-    cookieStore?.delete('session');
+    const csrfToken = cookieStore.get('token')?.value;
+    cookieStore?.delete('token');
+    return csrfToken ? { csrfToken } : { csrfToken : null };
+}
+
+/**
+ * 
+ * @param clientToken the token from the hidden form field
+ * @param serverToken the token from calling await getCsrfToken();
+ * @returns boolean if they are valid and match
+ */
+export const validateCsrfToken = async (clientToken: string | null, serverToken: string | null): Promise<boolean> => {
+    const isValidClient = await verifyCsrfToken(clientToken ?? "", TOKEN_SECRET);
+    const isValidServer = await verifyCsrfToken(serverToken ?? "", TOKEN_SECRET);
+    if (isValidClient && isValidServer) {
+        return clientToken === serverToken;
+    }
+    return false;
 }
