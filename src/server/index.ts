@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
-import { CspEnum, MiddlewareCallbackType } from "../lib/utils";
+import { Csp, MiddlewareCallbackType } from "../lib/utils";
 import { generateCsrfToken, verifyCsrfToken } from "../lib/csrf-token";
 
 const jwtSecret = process.env.JWT_SECRET as string;
@@ -22,8 +22,8 @@ const corsOptions = {
 export const AuthMiddlewareUtils = async (
     request: NextRequest,
     allowedOrigins: string[],
-    csp: CspEnum,
-     callback?: MiddlewareCallbackType
+    csp: Csp,
+    callback?: MiddlewareCallbackType
 ): Promise<NextResponse> => {
     // Refresh the session
     const refreshedResponse = await refreshSession(request, allowedOrigins, csp);
@@ -32,7 +32,7 @@ export const AuthMiddlewareUtils = async (
     if (!refreshedResponse.cookies.get('session')) {
         // If a callback is provided, run it with the request
         if (callback) {
-            const callbackResult = await callback(request);
+            const callbackResult = await callback(request, refreshedResponse);
             
             // If callback returns a NextResponse and not Error
             if (callbackResult instanceof NextResponse) {
@@ -55,7 +55,7 @@ export const AuthMiddlewareUtils = async (
 export const refreshSession = async (
     request: NextRequest,
     allowedOrigins: string[],
-    csp: CspEnum
+    csp: Csp
 ): Promise<NextResponse<unknown>> => {
 
     // Generate a response with csp headers
@@ -77,11 +77,11 @@ export const refreshSession = async (
  * @param request NextRequest
  * @returns a generated response with csp headers if provided, for production only
  */
-const handleCsp = async (csp: CspEnum, request: NextRequest): Promise<NextResponse> => {
+const handleCsp = async (csp: Csp, request: NextRequest): Promise<NextResponse> => {
     if (process.env.NODE_ENV === 'development') {
 		return NextResponse.next();
 	}
-    if (csp === CspEnum.STRICT) {
+    if (csp === Csp.STRICT) {
         const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
         const cspHeader = `
             default-src 'self';
@@ -120,7 +120,7 @@ const handleCsp = async (csp: CspEnum, request: NextRequest): Promise<NextRespon
         
         return response;
     }
-    else if (csp === CspEnum.RELAXED) {
+    else if (csp === Csp.RELAXED) {
         const cspHeader = `
         default-src 'self';
         script-src 'self' 'unsafe-eval' 'unsafe-inline';

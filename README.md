@@ -36,11 +36,11 @@ import { AuthProvider } from 'authlite';
 #### 3.1 No protected routes
 
 ```typescript
-import { AuthMiddleware, CspEnum } from 'authlite';
+import { AuthMiddleware, Csp } from 'authlite';
 
 const allowedOrigins = ['http://localhost:3000/'];
 
-export default AuthMiddleware(allowedOrigins, CspEnum.NONE);
+export default AuthMiddleware(allowedOrigins, Csp.NONE);
 
 export const config = {
     matcher: [
@@ -59,7 +59,7 @@ Add any additional allowed origin urls if needed. For csp, see [docs](https://ne
 #### 3.2 Protected routes
 
 ```typescript
-import { AuthMiddleware, CspEnum, protect } from 'authlite';
+import { AuthMiddleware, Csp, protect } from 'authlite';
 
 const allowedOrigins = ['http://localhost:3000/'];
 
@@ -72,9 +72,14 @@ const redirectUrl = '/login';
 
 export default AuthMiddleware(
     allowedOrigins, 
-    CspEnum.NONE, 
-    (request) => {
-        return protect(request, isProtectedRoute, redirectUrl);
+    Csp.NONE, 
+    (request, response) => {
+        return protect(
+            request, 
+            response,
+            isProtectedRoute, 
+            redirectUrl
+        );
     }
 );
 
@@ -109,7 +114,13 @@ const redirectUrl = '/auth/login';
 * To add searchParam `redirect` when you need to redirect the user back to the protected route after login:
 
 ```typescript
-protect(request, isProtectedRoute, redirectUrl, true);
+protect(
+    request, 
+    response, 
+    isProtectedRoute, 
+    redirectUrl, 
+    true
+);
 ```
 
 A typical `STRICT` csp setup would look like this:
@@ -204,20 +215,24 @@ export const loginAction = async (...) => {
 
 ```typescript
     import { useAuth } from 'authlite';
-
+    import { useRouter } from "next/navigation";
+    
     ...
     const { onLogin, onLogout } = useAuth();
+    const router = useRouter();
 
     const handleLogin = async () => {
         ...
         await onLogin();
         ...
+        router.push('...');
     };
 
     const handleLogout = async () => {
         ...
         await onLogout();
         ...
+        router.replace('...');
     }
 ```
 

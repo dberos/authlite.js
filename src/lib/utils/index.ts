@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthMiddlewareUtils } from "../../server";
 
-export type MiddlewareCallbackType = (request: NextRequest) => Promise<void | NextResponse> | void | NextResponse;
-export enum CspEnum {
+export type MiddlewareCallbackType = (request: NextRequest, response: NextResponse) => Promise<void | NextResponse> | void | NextResponse;
+export enum Csp {
     STRICT,
     RELAXED,
     NONE
@@ -15,7 +15,7 @@ export enum CspEnum {
  */
 export const AuthMiddleware = (
     allowedOrigins: string[], 
-    csp: CspEnum, 
+    csp: Csp, 
     callback?: MiddlewareCallbackType
 ) => {
     return (request: NextRequest): Promise<NextResponse> => {
@@ -32,7 +32,13 @@ export const AuthMiddleware = (
  * @throws Error if redirectUrl is a protected route
  * @returns Response
  */
-export const protect = async (request: NextRequest, isProtectedRoute: string[], redirectUrl: string, searchParams: boolean = false): Promise<NextResponse | void > => {
+export const protect = async (
+    request: NextRequest, 
+    response: NextResponse,
+    isProtectedRoute: string[], 
+    redirectUrl: string, searchParams: 
+    boolean = false
+): Promise<NextResponse | void > => {
     // If trying to access a protected route
     if (isProtectedRoute.some((route) => new RegExp(route).test(request.nextUrl.pathname))) {
         // Prevent endless loop by redirecting to a protected route
@@ -43,8 +49,16 @@ export const protect = async (request: NextRequest, isProtectedRoute: string[], 
         if (searchParams) {
             url.searchParams.set('redirect', request.nextUrl.pathname);
         }
-        // Redirect to a non-protected route
-        return NextResponse.redirect(url);
+
+        // Create a redirect response
+        const redirectResponse = NextResponse.redirect(url);
+
+        // Copy headers from the existing response
+        response.headers.forEach((value, key) => {
+            redirectResponse.headers.set(key, value);
+        });
+
+        return redirectResponse;
     }
 };
 
