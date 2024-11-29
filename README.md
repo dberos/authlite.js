@@ -215,8 +215,10 @@ export const loginAction = async (...) => {
 #### 4.2 Client Side
 
 ```typescript
-    import { useAuth } from 'authlite';
-    import { useRouter } from "next/navigation";
+"use client";
+
+import { useAuth } from 'authlite';
+import { useRouter } from "next/navigation";
     
     ...
     const { onLogin, onLogout } = useAuth();
