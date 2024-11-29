@@ -12,6 +12,7 @@ npm install authlite
 
 | Version | Description |
 |:-------------:|:--------------:|
+| v1.1      |   Security tweaks     |
 | v1.0      |   Initial lib     |
 
 ## Usage
@@ -52,7 +53,7 @@ export const config = {
 | Parameters | Options | Description |
 |:-------------:|:--------------:|:--------------:|
 | allowedOrigins       |   an array of strings with allowed origins     |  CORS configuration         |
-| csp       |   CspEnum.STRICT, CspEnum.RELAXED, CspEnum.NONE     |          CSP configuration |
+| csp       |   Csp.STRICT, Csp.RELAXED, Csp.NONE     |          CSP configuration |
 
 Add any additional allowed origin urls if needed. For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. If `STRICT` is selected you have to mark every page as async and have some async operation inside to avoid errors. If using `next/image`, it will produce errors due to width and height being injected, but it doesn't cause any problems.
 

@@ -1,6 +1,6 @@
 {
   "name": "authlite",
-  "version": "1.1.4",
+  "version": "1.2.1",
   "description": "Lite authentication system for Next.js",
   "keywords": ["next.js", "auth-library"],
   "author": "Dimitris Beros",
