@@ -58,19 +58,43 @@ export const protect = async (
 
 export const generateFingerprint = async (): Promise<string> => {
     try {
-        // Collect device data
-        const data = [
-            window.screen.width || 0,
-            window.screen.height || 0,
-            window.screen.colorDepth || 0,
-            window.devicePixelRatio || 0,
-            Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
-            navigator.userAgent || 'unknown',
-            navigator.language || 'unknown',
-            navigator.hardwareConcurrency || 'unknown',
-            navigator.maxTouchPoints || 0,
-            navigator.doNotTrack || 'unknown',
-        ];
+        // Create canvas data
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(0, 0, 100, 100);
+            ctx.fillStyle = 'white';
+            ctx.fillText('fingerprint', 10, 50);
+        }
+        const canvasData = canvas.toDataURL();
+
+        // Collect other data
+        const data = {
+            screen: {
+                width: window.screen.width || 0,
+                height: window.screen.height || 0,
+                colorDepth: window.screen.colorDepth || 0,
+                pixelRatio: window.devicePixelRatio || 0,
+                orientation: screen.orientation?.type || 'unknown',
+            },
+            browser: {
+                userAgent: navigator.userAgent || 'unknown',
+                language: navigator.language || 'unknown',
+                languages: navigator.languages || [],
+                cookieEnabled: navigator.cookieEnabled,
+                storage: {
+                    localStorage: !!window.localStorage,
+                    sessionStorage: !!window.sessionStorage,
+                    indexedDB: !!window.indexedDB,
+                },
+            },
+            performance: {
+                hardwareConcurrency: navigator.hardwareConcurrency || 0,
+            },
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+            canvas: canvasData,
+        };
 
         // Stringify the data
         const jsonData = JSON.stringify(data);
