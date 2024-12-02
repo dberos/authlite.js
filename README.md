@@ -12,6 +12,7 @@ npm install authlite
 
 | Version | Description |
 |:-------------:|:--------------:|
+| v1.2      |   Basic device fingerprinting     |
 | v1.1      |   Security tweaks     |
 | v1.0      |   Initial lib     |
 
