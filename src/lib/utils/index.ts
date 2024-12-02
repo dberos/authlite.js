@@ -56,6 +56,15 @@ export const protect = async (
     }
 };
 
+/**
+ * Generates a basic device fingerprint
+ * 
+ * **NOTE:** This function collects potentially sensitive information
+ * 
+ * GDPR Compliance: Obtain explicit user consent before calling this function
+ * @async
+ * @returns fingerprint string 
+ */
 export const generateFingerprint = async (): Promise<string> => {
     try {
         // Create canvas data
