@@ -1,6 +1,6 @@
 {
   "name": "authlite",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Lite authentication system for Next.js",
   "keywords": ["next.js", "auth-library"],
   "author": "Dimitris Beros",
@@ -16,6 +16,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types/index.js",
+      "types": "./dist/types/index.d.ts"
     },
     "./lib/jwt": {
       "import": "./dist/lib/jwt/index.js",

@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthMiddlewareUtils } from "../../server";
-
-export type MiddlewareCallbackType = (request: NextRequest, response: NextResponse) => Promise<void | NextResponse> | void | NextResponse;
-export enum Csp {
-    STRICT,
-    RELAXED,
-    NONE
-}
+import { Csp, MiddlewareCallbackType } from "../../types";
 
 /**
  * Middleware utility function

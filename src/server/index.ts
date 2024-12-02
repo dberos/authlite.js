@@ -3,8 +3,8 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
-import { Csp, MiddlewareCallbackType } from "../lib/utils";
 import { generateCsrfToken, verifyCsrfToken } from "../lib/csrf-token";
+import { Csp, JwtType, MiddlewareCallbackType } from "../types";
 
 const jwtSecret = process.env.JWT_SECRET as string;
 if (!jwtSecret) throw new Error('No JWT_SECRET provided');
@@ -278,11 +278,11 @@ export const createSession = async (user: object): Promise<boolean> => {
  * @returns The current session without verifying the jwt claims, only the signature
  * @returns Null if there is no current session or error when decoding the jwt
  */
-export const getSession = async <T = any>(): Promise<{ session: T | null | undefined }> => {
+export const getSession = async <T = any>(): Promise<{ session: ( T & JwtType ) | null | undefined }> => {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     if (token) {
-        const session = await decodeJwt(token, JWT_SECRET) as T | null | undefined;
+        const session = await decodeJwt(token, JWT_SECRET) as ( T & JwtType ) | null | undefined;
         return { session };
     }
     return { session: null };
@@ -294,11 +294,11 @@ export const getSession = async <T = any>(): Promise<{ session: T | null | undef
  * @returns The current session if authenticated
  * @returns Null if there is no current session or can't verify the jwt
  */
-export const authenticateSession = async <T = any>(): Promise<{ session: T | null | undefined }> => {
+export const authenticateSession = async <T = any>(): Promise<{ session: ( T & JwtType ) | null | undefined }> => {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     if (token) {
-        const session = await verifyJwt(token, JWT_SECRET) as T | null | undefined;
+        const session = await verifyJwt(token, JWT_SECRET) as ( T & JwtType ) | null | undefined;
         return { session };
     }
     return { session: null };

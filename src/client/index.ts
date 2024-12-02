@@ -2,9 +2,10 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { authenticateSession, deleteSession, getSession } from "../server";
+import { JwtType } from "../types";
 
 type AuthContextType<T> = {
-    session: T | null | undefined;
+    session: ( T & JwtType ) | null | undefined;
     setSession: React.Dispatch<React.SetStateAction<T | null | undefined>>;
     onLogin: () => Promise<void>;
     onLogout: () => Promise<void>;

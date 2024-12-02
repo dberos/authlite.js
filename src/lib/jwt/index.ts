@@ -26,8 +26,8 @@ export const createJwt = async (payload: object, expiresIn: string, secret: Uint
 
         // Add iat and exp to the payload
         const now = Math.floor(Date.now() / 1000);
-        const exp = now + parseExpiration(expiresIn);
         const iat = now;
+        const exp = now + parseExpiration(expiresIn);
 
         const fullPayload = {
             ...payload,
@@ -118,12 +118,6 @@ export const verifyJwt = async (token: string, secret: Uint8Array): Promise<obje
             const payloadJson = base64UrlDecode(encodedPayload);
             const payload = JSON.parse(payloadJson);
             const now = Math.floor(Date.now() / 1000);
-
-            // Check issued at
-            if (payload.iat && payload.iat > now) {
-                console.error('JWT issued in the future');
-                return null;
-            }
 
             // Check expiration
             if (payload.exp && payload.exp > now) {
