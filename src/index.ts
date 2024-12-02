@@ -8,6 +8,7 @@ export { verifyCsrfToken } from './lib/csrf-token';
 
 export { AuthMiddleware } from './lib/utils';
 export { protect } from './lib/utils';
+export { generateFingerprint } from './lib/utils';
 
 export { createSession } from './server';
 export { getSession } from './server';

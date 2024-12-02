@@ -204,7 +204,6 @@ import { UserType } from '...';
 
 export const loginAction = async (...) => {
     ...
-    // Consider keeping it simple and create more specific actions
     const user: UserType = {...}
     
     const success = await createSession(user);
@@ -367,7 +366,10 @@ export const protectedAction = async () => {
 
 ## Security
 
-Use in production at your own risk. If a session cookie is stolen, it will infinitely produce new sessions, unless `JWT_SECRET` has changed. Always call api routes from a server action. Consider changing `JWT_SECRET` frequently to invalidate sessions. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
+Use in production at your own risk. Always call api routes from a server action. Consider changing `JWT_SECRET` frequently to invalidate sessions. Consider calling `await generateFingerprint()`(GDPR) at login and add it to the user object and validate it at every protected action. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
+
+### fingerprint
+In the client component's login submit call `await generateFingerprint()` and add it to the user object. At every protected action generate it again, include it in a hidden form field and validate it server side against the jwt fingerprint.
 
 ### csrf token validation
 

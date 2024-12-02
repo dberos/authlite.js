@@ -56,6 +56,42 @@ export const protect = async (
     }
 };
 
+export const generateFingerprint = async (): Promise<string> => {
+    try {
+        // Collect device data
+        const data = [
+            window.screen.width || 0,
+            window.screen.height || 0,
+            window.screen.colorDepth || 0,
+            window.devicePixelRatio || 0,
+            Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+            navigator.userAgent || 'unknown',
+            navigator.language || 'unknown',
+            navigator.hardwareConcurrency || 'unknown',
+            navigator.maxTouchPoints || 0,
+            navigator.doNotTrack || 'unknown',
+        ];
+
+        // Stringify the data
+        const jsonData = JSON.stringify(data);
+
+        // Hash the data
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(jsonData);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', encodedData);
+
+        // Convert hash to hex string
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        return hashHex;
+    } 
+    catch (error) {
+        console.error('Error generating fingerprint:', error);
+        return 'error';
+    }
+}
+
 export const parseExpiration = (expiresIn: string): number => {
     const match = expiresIn.match(/^(\d+)([hmsd])$/);
     if (!match) throw new Error('Invalid expiration format');
