@@ -2,16 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { authenticateSession, deleteSession, getSession } from "../server";
-import { JwtType } from "../types";
+import { AuthContextType } from "../types";
 
-type AuthContextType<T> = {
-    session: ( T & JwtType ) | null | undefined;
-    setSession: React.Dispatch<React.SetStateAction<T | null | undefined>>;
-    onLogin: () => Promise<void>;
-    onLogout: () => Promise<void>;
-};
-
-// Create the context with a default value
+// Create the context for the provider
 export const AuthContext = createContext<AuthContextType<any> | undefined>(undefined);
 
 /**
