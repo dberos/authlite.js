@@ -398,8 +398,8 @@ import { getJwt } from 'authlite';
 
 ...
 const handleSubmit = async (...) => {
-    ...
     try {
+        ...
         // Get jwt
         const { jwt } = await getJwt();
         if (!jwt) throw new Error('Invalid jwt');
