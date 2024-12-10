@@ -465,35 +465,36 @@ export const POST = async (request: NextRequest) => {
 
 import { createCsrfToken, getCsrfToken } from 'authlite';
 
-const handleSubmit = async (...) => {
-    try {
-		// Create the csrf token
-        const { clientToken } = await createCsrfToken();
+    const handleSubmit = async (...) => {
+        try {
+            ...
+            // Create the csrf token
+            const { clientToken } = await createCsrfToken();
 
-		// Get the server csrf token
-		const { serverToken } = await getCsrfToken();
-        
-        // Data for the POST
-        const data = {
-            csrfToken: clientToken
+            // Get the server csrf token
+            const { serverToken } = await getCsrfToken();
+            
+            // Data for the POST
+            const data = {
+                csrfToken: clientToken
+            }
+            // Your fetch
+            const response = await fetch('/api/...', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Csrf-Token': serverToken || ""
+                },
+                body: JSON.stringify(data)
+            });
+
+            // Get response
+            const result = await response.json();
+            ...
         }
-        // Your fetch
-        const response = await fetch('/api/...', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Csrf-Token': serverToken || ""
-            },
-            body: JSON.stringify(data)
-        });
-
-        // Get response
-        const result = await response.json();
-        ...
-    }
-    catch (error) {
-        console.error('Error validating CSRF or making API request:', error);
-    }
+        catch (error) {
+            console.error('Error validating CSRF or making API request:', error);
+        }
 ```
 
 ##### route.ts
