@@ -8,7 +8,7 @@ Lite authentication system for [Next.js](https://nextjs.org/).
 npm install authlite
 ```
 
-## Versions
+## Releases
 
 | Version | Description |
 |:-------------:|:--------------:|
@@ -285,9 +285,143 @@ const { session } = useAuth<UserType>();
 ...
 ```
 
-#### 5.3 For Api Routes
+### 6. Device fingerprint **(GDPR)**
+
+In the client component's login submit call `await generateFingerprint()` and add it to the user object. At every protected action generate it again, include it in a hidden form field and validate it server side against the session fingerprint. If it's not validated, call `await deleteSession()` and redirect to the login route, maybe with searchParam `redirect` in the url like in middleware as well.
+
+### 7. Csrf Token validation
+
+#### client-component.tsx
+
+```typescript
+"use client";
+
+import { createCsrfToken } from 'authlite';
+import { protectedAction } from '...''
+...
+const handleSubmit = async () => {
+    ...
+    const { clientToken } = await createCsrfToken();
+    ...
+    await protectedAction(clientToken);
+}
+```
+
+#### protected-action.ts
+
+```typescript
+"use server";
+
+export const protectedAction = async (clientToken: string) => {
+    try {
+        ...
+        const { serverToken } = await getCsrfToken();
+        const isValid = await validateCsrfToken(clientToken, csrfToken);
+        ...
+    }
+    catch (error) {
+        console.error('Error validating csrf-token', error);
+    }
+}
+```
+
+### 8. Api routes
+
+#### 8.1 Login
+
+##### client-component.tsx
+
+```typescript
+"use client;
+
+import { useAuth } from "authlite";
+
+...
+const { onLogin } = useAuth();
+  const handleSubmit = async (...) => {
+    try {
+		// Your fetch
+        const response = await fetch('/api/...', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        // Get response
+        const result = await response.json();
+
+        ...
+        // Update session status
+        await onLogin();
+        ...
+    } 
+    catch (error) {
+        console.error('Error validating jwt or making API request:', error);
+    }
+  }
+```
 
 ##### route.ts
+
+```typescript
+import { NextResponse } from "next/server";
+import { createSession } from 'authlite';
+import { UserType } from '...'
+
+export const POST = async () => {
+    ...
+    const user: UserType = {...}
+    const success = await createSession(user);
+    if (success) {
+        return NextResponse.json(
+            { success: true, message: 'Session created successfully.' });
+    } 
+    
+    return NextResponse.json(
+        { success: false, message: 'Failed to create session.' },
+        { status: 403 }
+    );
+}
+```
+
+#### 8.2 Validate session
+
+##### client-component.tsx
+
+```typescript
+"use client";
+
+import { getJwt } from 'authlite';
+
+...
+const handleSubmit = async (...) => {
+    ...
+    try {
+        // Get jwt
+        const { jwt } = await getJwt();
+        if (!jwt) throw new Error('Invalid jwt');
+
+        // Your fetch
+        const response = await fetch('/api/...', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${jwt}`
+            },
+        });
+
+        // Get response
+        const result = await response.json();
+        ...
+    } 
+    catch (error) {
+        console.error('Error validating jwt or making API request:', error);
+    }
+  }
+```
+
+#### route.ts
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
@@ -309,7 +443,8 @@ export const POST = async (request: NextRequest) => {
     // Verify the token
     const verifiedToken = await verifyJwt(token, JWT_SECRET);
     if (verifiedToken) {
-        return NextResponse.json({ success: true, message: 'Jwt validated successfully.' });
+        return NextResponse.json(
+            { success: true, message: 'Jwt validated successfully.' });
     }
     
     return NextResponse.json(
@@ -319,151 +454,64 @@ export const POST = async (request: NextRequest) => {
 }
 ```
 
-##### protected-action.ts
+#### 8.3 Validate csrf-token
+
+##### client-component.tsx
 
 ```typescript
-"use server";
+"use client";
 
-import { getJwt } from "authlite";
-
-export const protectedAction = async () => {
-    ...
+const handleSubmit = async (...) => {
     try {
-        // Get jwt
-        const { jwt } = await getJwt();
-        if (!jwt) throw new Error('Invalid jwt');
+		// Create the csrf token
+        const { clientToken } = await createCsrfToken();
 
-        // Your fetch
-        const response = await fetch('[YOUR_FULL_DOMAIN]', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwt}`
-            },
-        });
-
-        // Get response
-        const result = await response.json();
-
-        if (response.ok) {
-            console.log(result.message);
-            return result;
-        } 
-        else {
-            console.error(result.message);
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-    } 
-    catch (error) {
-        console.error('Error validating jwt or making API request:', error);
-        return {
-            success: false,
-            message: 'An unknown error occurred.',
-        };
-    }
-}
-
-```
-
-## Security
-
-Use in production at your own risk. Always call api routes from a server action. If a session cookie is stolen, it will infinitely produce new sessions, unless `JWT_SECRET` has changed. Consider changing `JWT_SECRET` and `TOKEN_SECRET` frequently to invalidate sessions. Consider calling `await generateFingerprint()`**(GDPR)** at login and add it to the user object and validate it at every protected action. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
-
-### fingerprint
-In the client component's login submit call `await generateFingerprint()` and add it to the user object. At every protected action generate it again, include it in a hidden form field and validate it server side against the session fingerprint. If it's not validated, call `await deleteSession()` and redirect to the login route, maybe with searchParam `redirect` in the url like in middleware as well.
-
-### csrf token validation
-
-#### client-component.tsx
-
-```typescript
-import { createCsrfToken } from 'authlite';
-import { protectedAction } from '...''
-...
-const handleSubmit = async () => {
-    ...
-    const { csrfToken } = await createCsrfToken();
-    ...
-    await protectedAction(csrfToken);
-}
-```
-
-#### protected-action.ts
-
-```typescript
-"use server";
-
-import { getCsrfToken, validateCsrfToken } from 'authlite';
-
-export const protectedAction = async (clientToken: string) => {
-    ...
-    try {
-        const { csrfToken } = await getCsrfToken();
-        // For server action only
-        const isValid = await validateCsrfToken(clientToken, csrfToken);
-        ...
-        // Or for api routes
-        // Verify the token exists
-        if (!csrfToken) throw new Error('No csrf token found');
+		// Get the server csrf token
+		const { serverToken } = await getCsrfToken();
         
         // Data for the POST
         const data = {
             csrfToken: clientToken
         }
         // Your fetch
-        const response = await fetch('[YOUR_FULL_DOMAIN]', {
+        const response = await fetch('/api/...', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Csrf-Token': csrfToken
+                'X-Csrf-Token': serverToken || ""
             },
             body: JSON.stringify(data)
         });
 
         // Get response
         const result = await response.json();
-
-        if (response.ok) {
-            console.log(result.message);
-            return result;
-        } 
-        else {
-            console.error(result.message);
-            throw new Error(`API request failed with status ${response.status}`);
-        }
+        ...
     }
     catch (error) {
         console.error('Error validating CSRF or making API request:', error);
-        return {
-            success: false,
-            message: 'An unknown error occurred.',
-        };
     }
-
-}
-
 ```
 
-#### route.ts
+##### route.ts
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfToken } from 'authlite';
 
 export const POST = async (request: NextRequest) => {
-    ...
     // Get headers
     const headers = new Headers(request.headers);
-    const tokenHeader = headers.get('X-Csrf-Token') || "";
+    const serverToken = headers.get('X-Csrf-Token') || "";
 
     // Get request body
     const body = await request.json();
-    const tokenBody = body.csrfToken;
+    const clientToken = body.csrfToken;
 
     // Verify the tokens
-    const isValidCsrfToken = await validateCsrfToken(tokenHeader, tokenBody);
+    const isValidCsrfToken = await validateCsrfToken(clientToken, serverToken);
     if (isValidCsrfToken) {
-        return NextResponse.json({ success: true, message: 'CSRF token validated successfully.' });
+        return NextResponse.json(
+            { success: true, message: 'CSRF token validated successfully.' });
     }
     
     return NextResponse.json(
@@ -472,6 +520,12 @@ export const POST = async (request: NextRequest) => {
     );
 }
 ```
+
+
+## Security
+
+Use in production at your own risk. If a session cookie is stolen, it will infinitely produce new sessions, unless `JWT_SECRET` has changed. Consider changing `JWT_SECRET` and `TOKEN_SECRET` frequently to invalidate sessions. Consider calling `await generateFingerprint()`**(GDPR)** at login and add it to the user object and validate it at every protected action. Consider having only your domain as `allowedOrigins` in CORS configuration. Consider having `STRICT` CSP policy. Consider including csrf token in hidden form fields for protected actions.
+
 
 ## OAuth
 

@@ -331,7 +331,7 @@ export const getJwt = async (): Promise<{ jwt: string | null }> => {
  * Server action to be called at client to generate and get a csrf token
  * @returns the generated token
  */
-export const createCsrfToken = async (): Promise<{ csrfToken: string }> => {
+export const createCsrfToken = async (): Promise<{ clientToken: string }> => {
     const cookieStore = await cookies();
     const csrfToken = await generateCsrfToken('1m', TOKEN_SECRET);
     cookieStore.set('token', csrfToken, {
@@ -341,7 +341,7 @@ export const createCsrfToken = async (): Promise<{ csrfToken: string }> => {
         maxAge: 60 * 30,
         path: '/',
     });
-    return { csrfToken }
+    return { clientToken: csrfToken }
 }
 
 /**
@@ -350,11 +350,11 @@ export const createCsrfToken = async (): Promise<{ csrfToken: string }> => {
  * @deletes csrf token cookie
  * @returns csrfToken
  */
-export const getCsrfToken = async (): Promise<{ csrfToken: string | null }> => {
+export const getCsrfToken = async (): Promise<{ serverToken: string | null }> => {
     const cookieStore = await cookies();
     const csrfToken = cookieStore.get('token')?.value;
     cookieStore?.delete('token');
-    return csrfToken ? { csrfToken } : { csrfToken : null };
+    return csrfToken ? { serverToken: csrfToken } : { serverToken : null };
 }
 
 /**
