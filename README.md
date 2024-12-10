@@ -12,6 +12,7 @@ npm install authlite
 
 | Version | Description |
 |:-------------:|:--------------:|
+| v1.3      |   Minor tweaks     |
 | v1.2      |   Basic device fingerprinting     |
 | v1.1      |   Security tweaks     |
 | v1.0      |   Initial lib     |
@@ -297,7 +298,7 @@ In the client component's login submit call `await generateFingerprint()` and ad
 "use client";
 
 import { createCsrfToken } from 'authlite';
-import { protectedAction } from '...''
+import { protectedAction } from '...';
 ...
 const handleSubmit = async () => {
     ...
@@ -332,34 +333,35 @@ export const protectedAction = async (clientToken: string) => {
 ##### client-component.tsx
 
 ```typescript
-"use client;
+"use client";
 
-import { useAuth } from "authlite";
+import { useAuth } from 'authlite';
 
-...
-const { onLogin } = useAuth();
-  const handleSubmit = async (...) => {
-    try {
-		// Your fetch
-        const response = await fetch('/api/...', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+    ...
+    const { onLogin } = useAuth();
+    const handleSubmit = async (...) => {
+        try {
+            ...
+            // Your fetch
+            const response = await fetch('/api/...', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
-        // Get response
-        const result = await response.json();
+            // Get response
+            const result = await response.json();
 
-        ...
-        // Update session status
-        await onLogin();
-        ...
-    } 
-    catch (error) {
-        console.error('Error validating jwt or making API request:', error);
+            ...
+            // Update session status
+            await onLogin();
+            ...
+        } 
+        catch (error) {
+            console.error('Error validating jwt or making API request:', error);
+        }
     }
-  }
 ```
 
 ##### route.ts
@@ -460,6 +462,8 @@ export const POST = async (request: NextRequest) => {
 
 ```typescript
 "use client";
+
+import { createCsrfToken, getCsrfToken } from 'authlite';
 
 const handleSubmit = async (...) => {
     try {
