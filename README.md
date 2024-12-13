@@ -317,7 +317,7 @@ export const protectedAction = async (clientToken: string) => {
     try {
         ...
         const { serverToken } = await getCsrfToken();
-        const isValid = await validateCsrfToken(clientToken, csrfToken);
+        const isValid = await validateCsrfToken(clientToken, serverToken);
         ...
     }
     catch (error) {
@@ -327,6 +327,8 @@ export const protectedAction = async (clientToken: string) => {
 ```
 
 ### 8. Api routes
+
+You can call the api from the client or from a server action. If server is preferred, you have to add the full domain before `/api`. If planning to use a server accessing function inside a route handler like `createSession()`, manipulate the response cookies, or accessing the cookieStore, api has to be called from the client.
 
 #### 8.1 Login
 
@@ -354,7 +356,7 @@ import { useAuth } from 'authlite';
             const result = await response.json();
 
             ...
-            // Update session status
+            // Update session status if response is ok
             await onLogin();
             ...
         } 
