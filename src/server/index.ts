@@ -260,7 +260,7 @@ const handleCsp = async (
         return response;
     }
     else {
-        return NextResponse.next();
+        return response;
     }
 }
 
