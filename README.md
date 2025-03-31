@@ -41,7 +41,8 @@ import { AuthProvider } from 'authlite';
 ```typescript
 import { AuthMiddleware, Csp } from 'authlite';
 
-const allowedOrigins = ['http://localhost:3000/'];
+// Without trailing /
+const allowedOrigins = ['http://localhost:3000'];
 
 export default AuthMiddleware(allowedOrigins, Csp.NONE);
 
@@ -64,7 +65,8 @@ Add any additional allowed origin urls if needed. For csp, see [docs](https://ne
 ```typescript
 import { AuthMiddleware, Csp, protect } from 'authlite';
 
-const allowedOrigins = ['http://localhost:3000/'];
+// Without trailing /
+const allowedOrigins = ['http://localhost:3000'];
 
 const isProtectedRoute = [
     '/profile(.*)',

@@ -14,10 +14,77 @@ const csrfSecret = process.env.TOKEN_SECRET as string;
 if (!csrfSecret) throw new Error('No TOKEN_SECRET provided');
 const TOKEN_SECRET = new TextEncoder().encode(csrfSecret);
 
-const corsOptions = {
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Csrf-Token, X-Nonce',
-};
+class MiddlewareResponse {
+    // Request and Response
+    private response: NextResponse;
+    private request: NextRequest;
+
+    // CORS and CSP configuration
+    private allowedOrigins: string[];
+    private cspConfig: Csp;
+
+    // Resolve promises
+    private chain: Promise<void>;
+
+    public constructor(request: NextRequest, allowedOrigins: string[], csp: Csp) {
+        this.request = request;
+        this.response = NextResponse.next({
+            request: {
+                headers: this.request.headers
+            }
+        });
+
+        this.allowedOrigins = allowedOrigins;
+        this.cspConfig = csp;
+
+        // Resolve promises
+        this.chain = Promise.resolve();
+    }
+
+    public cors(): MiddlewareResponse {
+        this.chain = this.chain.then(async () => {
+            this.response = await handleCors(this.allowedOrigins, this.request, this.response);
+    
+            // If the request is preflight or not allowed, throw an error to stop further execution
+            if ([204, 403].includes(this.response.status)) {
+                throw new Error('Blocked request from CORS');
+            }
+        })
+    
+        return this;
+    }
+
+    public csp(): MiddlewareResponse {
+        // This or any other chain won't execute after blocked CORS request
+        // And the code inside won't run
+        this.chain = this.chain.then(async () => {
+            this.response = await handleCsp(this.cspConfig, this.request, this.response);
+        });
+        // Allow chaining
+        return this;
+    }
+
+    public session(): MiddlewareResponse {
+        this.chain = this.chain.then(async () => {
+            this.response = await handleSession(this.request, this.response);
+        });
+        // Allow chaining
+        return this;
+    }
+
+    public async returns(): Promise<NextResponse> {
+        try {
+            // Await all promises to resolve
+            await this.chain;
+        } 
+        catch {
+            // Error thrown from CORS
+            return this.response;
+        }
+        // Return the response
+        return this.response;
+    }
+}
 
 export const AuthMiddlewareUtils = async (
     request: NextRequest,
@@ -26,7 +93,7 @@ export const AuthMiddlewareUtils = async (
     callback?: MiddlewareCallbackType
 ): Promise<NextResponse> => {
     // Refresh the session
-    const refreshedResponse = await refreshSession(request, allowedOrigins, csp);
+    const refreshedResponse = await handleMiddleware(request, allowedOrigins, csp);
 
     // If the session did not refresh
     if (!refreshedResponse.cookies.get('session')) {
@@ -45,31 +112,72 @@ export const AuthMiddlewareUtils = async (
 }
 
 /**
- * Server action to refresh current session if available
+ * Server action to perform the actions needed to a response
  * @async
  * @param request NextRequest
  * @param response NextResponse
  * @returns refreshed response
  * @throws Error if csrf header doesn't match
  */
-export const refreshSession = async (
+export const handleMiddleware = async (
     request: NextRequest,
     allowedOrigins: string[],
     csp: Csp
 ): Promise<NextResponse<unknown>> => {
 
-    // Generate a response with csp headers
-    let response = await handleCsp(csp, request);
+    // Create a new response and handle all middleware options
+    const response = await new MiddlewareResponse(request, allowedOrigins, csp)
+    .cors()
+    .csp()
+    .session()
+    .returns();
 
-    // Hanlde cors options
-    response = await handleCors(request, response, allowedOrigins);
-
-    // Hanlde jwt refresh
-    response = await handleJwt(request, response);
-    
-    // Return the response
     return response;
 };
+
+/**
+ * 
+ * @param request NextRequest
+ * @param response NextResponse
+ * @param allowedOrigins Array of allowed origins
+ * @returns NextResponse with correct headers
+ */
+const handleCors = async (
+    allowedOrigins: string[],
+    request: NextRequest, 
+    response: NextResponse,
+): Promise<NextResponse> => {
+    // CORS options
+    const requestHeaders = new Headers(request.headers);
+    const origin = requestHeaders.get("origin") ?? "";
+    const allowedMethods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"];
+    const allowedHeaders = ["Content-Type", "Authorization", "X-Csrf-Token", "X-Nonce"];
+
+    // Add CORS headers
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": allowedOrigins.join(","),
+        "Access-Control-Allow-Methods": allowedMethods.join(","),
+        "Access-Control-Allow-Headers": allowedHeaders.join(",")
+    };
+    Object.entries(corsHeaders).forEach(([key, value]) => response.headers.set(key, value));
+
+    // Handle Preflight Request
+    if (request.method === "OPTIONS") {
+        // If trying to return .json({}, {...}) it doesn't work
+        return new NextResponse(null, { status: 204, headers: corsHeaders });
+    }
+
+    // Block CORS requests from unauthorized origins
+    if (origin && !allowedOrigins.includes(origin)) {
+        // If trying to add all previous headers, it doesn't return a 403
+        return NextResponse.json(
+            { error: "Request blocked from CORS policy" },
+            { status: 403, headers: corsHeaders }
+        );
+    }
+
+    return response;
+}
 
 /**
  * 
@@ -77,9 +185,13 @@ export const refreshSession = async (
  * @param request NextRequest
  * @returns a generated response with csp headers if provided, for production only
  */
-const handleCsp = async (csp: Csp, request: NextRequest): Promise<NextResponse> => {
+const handleCsp = async (
+    csp: Csp, 
+    request: NextRequest, 
+    response: NextResponse
+): Promise<NextResponse> => {
     if (process.env.NODE_ENV === 'development') {
-		return NextResponse.next();
+		return response;
 	}
     if (csp === Csp.STRICT) {
         const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
@@ -107,12 +219,7 @@ const handleCsp = async (csp: Csp, request: NextRequest): Promise<NextResponse> 
             'Content-Security-Policy',
             contentSecurityPolicyHeaderValue
         )
-        
-        const response = NextResponse.next({
-            request: {
-            headers: requestHeaders,
-            },
-        })
+
         response.headers.set(
             'Content-Security-Policy',
             contentSecurityPolicyHeaderValue
@@ -145,11 +252,6 @@ const handleCsp = async (csp: Csp, request: NextRequest): Promise<NextResponse> 
             contentSecurityPolicyHeaderValue
         )
         
-        const response = NextResponse.next({
-            request: {
-            headers: requestHeaders,
-            },
-        })
         response.headers.set(
             'Content-Security-Policy',
             contentSecurityPolicyHeaderValue
@@ -163,59 +265,13 @@ const handleCsp = async (csp: Csp, request: NextRequest): Promise<NextResponse> 
 }
 
 /**
- * 
- * @param request NextRequest
- * @param response NextResponse
- * @param allowedOrigins Array of allowed origins
- * @returns NextResponse with correct headers
- */
-const handleCors = async (
-    request: NextRequest, 
-    response: NextResponse,
-    allowedOrigins: string[]
-): Promise<NextResponse> => {
-    // Check the origin from the request
-    const origin = request.headers.get('origin') ?? ''
-    const isAllowedOrigin = allowedOrigins.includes(origin)
-    
-    // Handle preflighted requests
-    const isPreflight = request.method === 'OPTIONS'
-    
-    if (isPreflight) {
-        const preflightHeaders = {
-        ...(isAllowedOrigin && { 'Access-Control-Allow-Origin': origin }),
-        ...corsOptions,
-        }
-        // Create a new JSON response and copy existing headers
-        const jsonResponse = NextResponse.json({}, { headers: preflightHeaders });
-
-        // Copy headers from the original response (if needed)
-        response.headers.forEach((value, key) => {
-            jsonResponse.headers.set(key, value);
-        });
-
-        return jsonResponse;
-    }
-    
-    if (isAllowedOrigin) {
-        response.headers.set('Access-Control-Allow-Origin', origin)
-    }
-    
-    Object.entries(corsOptions).forEach(([key, value]) => {
-        response.headers.set(key, value)
-    })
-    
-    return response;
-}
-
-/**
  * @async
  * @param request NextRequest
  * @param response NextResponse
  * @throws Error if jwt signature didn't verify
  * @returns response with jwt cookie if refreshed
  */
-const handleJwt = async (request: NextRequest, response: NextResponse): Promise<NextResponse> => {
+const handleSession = async (request: NextRequest, response: NextResponse): Promise<NextResponse> => {
     // Get the session cookie
     const token = request.cookies.get('session')?.value;
     // If no session is available return
@@ -226,8 +282,7 @@ const handleJwt = async (request: NextRequest, response: NextResponse): Promise<
     // If signature didn't verify return the response
     if (!decodedToken) {
         // Delete the cookie
-        const cookieStore = await cookies();
-        cookieStore?.delete('session');
+        response.cookies?.delete('session');
         return response;
     }
     // Create jwt that lasts 1 minute and cookie 7 days
