@@ -95,8 +95,8 @@ export const AuthMiddlewareUtils = async (
     // Refresh the session
     const refreshedResponse = await handleMiddleware(request, allowedOrigins, csp);
 
-    // If the session did not refresh
-    if (!refreshedResponse.cookies.get('session')) {
+    // If the session didn't refresh or request isn't blocked from CORS
+    if (!refreshedResponse.cookies.get('session') && ![204, 403].includes(refreshedResponse.status)) {
         // If a callback is provided, run it with the request
         if (callback) {
             const callbackResult = await callback(request, refreshedResponse);
