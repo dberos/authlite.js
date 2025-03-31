@@ -67,7 +67,7 @@ export const config = {
 |   redirectUrl |  the url to redirect to when accessing a protecting route and user is not authenticated   |   false   |
 |   redirectParm |  whether redirect searchParam will be added when accessing a protected route and user is not authenticated   |   false   |
 
-Modify the options to fit your app needs. Cors will block requests from anauthorized origins and return origin, method and headers Cors headers for preflight requests.  For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. Add the array of protected routes and a redirect url to block user from accessing authenticated - only resources. Add `true` to redirectParam to have a redirect searchParam back at the redirectUrl.
+Modify the options to fit your app needs. Cors will block requests from unauthorized origins and return origin, method and headers Cors headers for preflight requests.  For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. Add the array of protected routes and a redirect url to block user from accessing authenticated - only resources. Add `true` to redirectParam to have a redirect searchParam back at the redirectUrl.
 
 #### Useful configurations
 
