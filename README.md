@@ -12,6 +12,7 @@ npm install authlite
 
 | Version | Description |
 |:-------------:|:--------------:|
+| v1.4      |   Modify Middleware     |
 | v1.3      |   Minor tweaks     |
 | v1.2      |   Basic device fingerprinting     |
 | v1.1      |   Security tweaks     |
@@ -36,15 +37,19 @@ import { AuthProvider } from 'authlite';
 ```
 ### 3. Create middleware.ts at the root of your project
 
-#### 3.1 No protected routes
-
 ```typescript
-import { AuthMiddleware, Csp } from 'authlite';
+import { AuthMiddleware, Csp, Options } from 'authlite';
 
-// Without trailing /
-const allowedOrigins = ['http://localhost:3000'];
+// Example usage
+const options: Options = {
+    allowedOrigins: ['http://localhost:3000'],
+    csp: Csp.NONE,
+    isProtectedRoute: ['/dashboard(.*)'],
+    redirectUrl : '/login',
+    redirectParam: true
+}
 
-export default AuthMiddleware(allowedOrigins, Csp.NONE);
+export default AuthMiddleware(options);
 
 export const config = {
     matcher: [
@@ -52,80 +57,40 @@ export const config = {
     ],
 }
 
+
 ```
-| Parameters | Options | Description |
+| Parameters | Options | Required |
 |:-------------:|:--------------:|:--------------:|
-| allowedOrigins       |   an array of strings with allowed origins     |  CORS configuration         |
-| csp       |   Csp.STRICT, Csp.RELAXED, Csp.NONE     |          CSP configuration |
+| allowedOrigins       |   an array of strings with allowed origins     |   true    |
+|   csp       |   Csp.STRICT, Csp.RELAXED, Csp.NONE     | true    |
+|   isProtectedRoute |  an array of strings with protected routes   |   false   |   
+|   redirectUrl |  the url to redirect to when accessing a protecting route and user is not authenticated   |   false   |
+|   redirectParm |  whether redirect searchParam will be added when accessing a protected route and user is not authenticated   |   false   |
 
-Add any additional allowed origin urls if needed. For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. If `STRICT` is selected you have to mark every page as async and have some async operation inside to avoid errors. If using `next/image`, it will produce errors due to width and height being injected, but it doesn't cause any problems.
+Modify the options to fit your app needs. Cors will block requests from anauthorized origins and return origin, method and headers Cors headers for preflight requests.  For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. Add the array of protected routes and a redirect url to block user from accessing authenticated - only resources. Add `true` to redirectParam to have a redirect searchParam back at the redirectUrl.
 
-#### 3.2 Protected routes
-
-```typescript
-import { AuthMiddleware, Csp, protect } from 'authlite';
-
-// Without trailing /
-const allowedOrigins = ['http://localhost:3000'];
-
-const isProtectedRoute = [
-    '/profile(.*)',
-    '/dashboard(.*)'
-];
-
-const redirectUrl = '/login';
-
-export default AuthMiddleware(
-    allowedOrigins, 
-    Csp.NONE, 
-    (request, response) => {
-        return protect(
-            request, 
-            response,
-            isProtectedRoute, 
-            redirectUrl
-        );
-    }
-);
-
-export const config = {
-    matcher: [
-        '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
-    ],
-}
-```
-This setup protects all routes in /profile and /dashboard. Other useful configurations are:
+#### Useful configurations
 
 * To protect all routes except for login and register:
 
 ```typescript
-const isProtectedRoute = [
-    '/((?!login|register)(.*))'
-];
-
-const redirectUrl = '/login';
+const options: Options = {
+    ...
+    isProtectedRoute: ['/((?!login|register)(.*))'],
+    redirectUrl : '/login',
+    ...
+}
 ```
 
 * To protect all routes except for all /auth routes:
 
 ```typescript
-const isProtectedRoute = [
-    '^/(?!auth)(.*)'  
-];
-
-const redirectUrl = '/auth/login';
-```
-
-* To add searchParam `redirect` when you need to redirect the user back to the protected route after login:
-
-```typescript
-protect(
-    request, 
-    response, 
-    isProtectedRoute, 
-    redirectUrl, 
-    true
-);
+const options: Options = {
+    ...
+    isProtectedRoute: ['^/(?!auth)(.*)'],
+    redirectUrl : '/auth/login',
+    ...
+}
 ```
 
 A typical `STRICT` csp setup would look like this:
@@ -155,7 +120,8 @@ export default async function Home() {
           `
         }
       </style>
-      {/* Image will produce error in production */}
+      {/* Image will produce error in production due to inline width and height */}
+      { /* It won't cause any problems */ }
       <Image 
       src={'./next.svg'}
       alt="next logo"

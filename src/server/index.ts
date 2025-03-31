@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { createJwt, decodeJwt, verifyJwt } from "../lib/jwt";
 import { generateCsrfToken, verifyCsrfToken } from "../lib/csrf-token";
-import { Csp, JwtType, MiddlewareCallbackType } from "../types";
+import { Csp, JwtType, Options } from "../types";
 
 const jwtSecret = process.env.JWT_SECRET as string;
 if (!jwtSecret) throw new Error('No JWT_SECRET provided');
@@ -19,14 +19,13 @@ class MiddlewareResponse {
     private response: NextResponse;
     private request: NextRequest;
 
-    // CORS and CSP configuration
-    private allowedOrigins: string[];
-    private cspConfig: Csp;
+    // Middleware options
+    private options: Options
 
     // Resolve promises
     private chain: Promise<void>;
 
-    public constructor(request: NextRequest, allowedOrigins: string[], csp: Csp) {
+    public constructor(request: NextRequest, options: Options) {
         this.request = request;
         this.response = NextResponse.next({
             request: {
@@ -34,8 +33,8 @@ class MiddlewareResponse {
             }
         });
 
-        this.allowedOrigins = allowedOrigins;
-        this.cspConfig = csp;
+        // Middleware options
+        this.options = options;
 
         // Resolve promises
         this.chain = Promise.resolve();
@@ -43,7 +42,7 @@ class MiddlewareResponse {
 
     public cors(): MiddlewareResponse {
         this.chain = this.chain.then(async () => {
-            this.response = await handleCors(this.allowedOrigins, this.request, this.response);
+            this.response = await handleCors(this.request, this.response, this.options);
     
             // If the request is preflight or not allowed, throw an error to stop further execution
             if ([204, 403].includes(this.response.status)) {
@@ -58,7 +57,7 @@ class MiddlewareResponse {
         // This or any other chain won't execute after blocked CORS request
         // And the code inside won't run
         this.chain = this.chain.then(async () => {
-            this.response = await handleCsp(this.cspConfig, this.request, this.response);
+            this.response = await handleCsp(this.request, this.response, this.options);
         });
         // Allow chaining
         return this;
@@ -68,6 +67,41 @@ class MiddlewareResponse {
         this.chain = this.chain.then(async () => {
             this.response = await handleSession(this.request, this.response);
         });
+        // Allow chaining
+        return this;
+    }
+
+    public protect(): MiddlewareResponse {
+        const isProtectedRoute = this.options.isProtectedRoute;
+        const redirectUrl = this.options.redirectUrl;
+
+        if (!isProtectedRoute?.length || !redirectUrl) return this;
+        this.chain = this.chain.then(async () => {
+            if (!this.response.cookies?.get('session')) {
+                if (isProtectedRoute.some((route) => new RegExp(route).test(this.request.nextUrl.pathname))) {
+                    // Prevent endless loop by redirecting to a protected route
+                    if (isProtectedRoute.some((route) => new RegExp(route).test(redirectUrl))) {
+                        throw new Error("Redirect URL cannot be a protected route.");
+                    }
+                    // Create a new URL
+                    const url = new URL(redirectUrl, this.request.url);
+
+                    if (this.options.redirectParam) {
+                        url.searchParams.set('redirect', this.request.nextUrl.pathname);
+                    }
+        
+                    // Create a redirect response
+                    const redirectResponse = NextResponse.redirect(url);
+        
+                    // Copy headers from the existing response
+                    this.response.headers.forEach((value, key) => {
+                        redirectResponse.headers.set(key, value);
+                    });
+        
+                    this.response = redirectResponse;
+                }
+            }
+        })
         // Allow chaining
         return this;
     }
@@ -88,64 +122,30 @@ class MiddlewareResponse {
 
 export const AuthMiddlewareUtils = async (
     request: NextRequest,
-    allowedOrigins: string[],
-    csp: Csp,
-    callback?: MiddlewareCallbackType
+    options: Options
 ): Promise<NextResponse> => {
-    // Refresh the session
-    const refreshedResponse = await handleMiddleware(request, allowedOrigins, csp);
-
-    // If the session didn't refresh or request isn't blocked from CORS
-    if (!refreshedResponse.cookies.get('session') && ![204, 403].includes(refreshedResponse.status)) {
-        // If a callback is provided, run it with the request
-        if (callback) {
-            const callbackResult = await callback(request, refreshedResponse);
-            
-            // If callback returns a NextResponse and not Error
-            if (callbackResult instanceof NextResponse) {
-                return callbackResult;
-            }
-        }
-    }
-    // Return the refreshed response
-    return refreshedResponse;
-}
-
-/**
- * Server action to perform the actions needed to a response
- * @async
- * @param request NextRequest
- * @param response NextResponse
- * @returns refreshed response
- * @throws Error if csrf header doesn't match
- */
-export const handleMiddleware = async (
-    request: NextRequest,
-    allowedOrigins: string[],
-    csp: Csp
-): Promise<NextResponse<unknown>> => {
-
     // Create a new response and handle all middleware options
-    const response = await new MiddlewareResponse(request, allowedOrigins, csp)
+    const response = await new MiddlewareResponse(request, options)
     .cors()
     .csp()
     .session()
+    .protect()
     .returns();
 
     return response;
-};
+}
 
 /**
  * 
  * @param request NextRequest
  * @param response NextResponse
- * @param allowedOrigins Array of allowed origins
+ * @param options Middleware options
  * @returns NextResponse with correct headers
  */
 const handleCors = async (
-    allowedOrigins: string[],
     request: NextRequest, 
     response: NextResponse,
+    options: Options
 ): Promise<NextResponse> => {
     // CORS options
     const requestHeaders = new Headers(request.headers);
@@ -155,7 +155,7 @@ const handleCors = async (
 
     // Add CORS headers
     const corsHeaders = {
-        "Access-Control-Allow-Origin": allowedOrigins.join(","),
+        "Access-Control-Allow-Origin": options.allowedOrigins.join(","),
         "Access-Control-Allow-Methods": allowedMethods.join(","),
         "Access-Control-Allow-Headers": allowedHeaders.join(",")
     };
@@ -168,7 +168,7 @@ const handleCors = async (
     }
 
     // Block CORS requests from unauthorized origins
-    if (origin && !allowedOrigins.includes(origin)) {
+    if (origin && !options.allowedOrigins.includes(origin)) {
         // If trying to add all previous headers, it doesn't return a 403
         return NextResponse.json(
             { error: "Request blocked from CORS policy" },
@@ -181,19 +181,19 @@ const handleCors = async (
 
 /**
  * 
- * @param csp The csp type
  * @param request NextRequest
+ * @param options Middleware options
  * @returns a generated response with csp headers if provided, for production only
  */
 const handleCsp = async (
-    csp: Csp, 
     request: NextRequest, 
-    response: NextResponse
+    response: NextResponse,
+    options: Options
 ): Promise<NextResponse> => {
     if (process.env.NODE_ENV === 'development') {
 		return response;
 	}
-    if (csp === Csp.STRICT) {
+    if (options.csp === Csp.STRICT) {
         const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
         const cspHeader = `
             default-src 'self';
@@ -227,7 +227,7 @@ const handleCsp = async (
         
         return response;
     }
-    else if (csp === Csp.RELAXED) {
+    else if (options.csp === Csp.RELAXED) {
         const cspHeader = `
         default-src 'self';
         script-src 'self' 'unsafe-eval' 'unsafe-inline';

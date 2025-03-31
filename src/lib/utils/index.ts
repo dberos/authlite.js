@@ -1,59 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthMiddlewareUtils } from "../../server";
-import { Csp, MiddlewareCallbackType } from "../../types";
+import { Csp, Options } from "../../types";
 
-/**
- * Middleware utility function
- * @param callback Optional callback handler to protect routes
- * @returns response
- */
-export const AuthMiddleware = (
-    allowedOrigins: string[], 
-    csp: Csp, 
-    callback?: MiddlewareCallbackType
-) => {
-    return (request: NextRequest): Promise<NextResponse> => {
-        return AuthMiddlewareUtils(request, allowedOrigins, csp, callback);
-    };
+// Check for JavaScript apps
+const validateOptions = (options: any): options is Options => {
+    return (
+        options &&
+        Array.isArray(options.allowedOrigins) &&
+        typeof options.csp === 'number' &&
+        Object.values(Csp).includes(options.csp) &&
+        (options.isProtectedRoute === undefined || Array.isArray(options.isProtectedRoute)) &&
+        (options.redirectUrl === undefined || typeof options.redirectUrl === 'string') &&
+        (options.redirectParam === undefined || typeof options.redirectParam === 'boolean')
+    );
 };
 
 /**
- * Utility function to protect routes
- * @async
- * @param request 
- * @param isProtectedRoute Array with the protected routed
- * @param redirectUrl Url to redirect to if user tries to access protected route when not authenticated
- * @throws Error if redirectUrl is a protected route
- * @returns Response
+ * Middleware utility function
+ * @param options Middleware options
+ * @returns response
+ * @throws Error for invalid options object, redirectUrl being a protected route, invalid jwt signature
  */
-export const protect = async (
-    request: NextRequest, 
-    response: NextResponse,
-    isProtectedRoute: string[], 
-    redirectUrl: string, searchParams: 
-    boolean = false
-): Promise<NextResponse | void > => {
-    // If trying to access a protected route
-    if (isProtectedRoute.some((route) => new RegExp(route).test(request.nextUrl.pathname))) {
-        // Prevent endless loop by redirecting to a protected route
-        if (isProtectedRoute.some((route) => new RegExp(route).test(redirectUrl))) {
-            throw new Error("Redirect URL cannot be a protected route.");
-        }
-        const url = new URL(redirectUrl, request.url);
-        if (searchParams) {
-            url.searchParams.set('redirect', request.nextUrl.pathname);
-        }
-
-        // Create a redirect response
-        const redirectResponse = NextResponse.redirect(url);
-
-        // Copy headers from the existing response
-        response.headers.forEach((value, key) => {
-            redirectResponse.headers.set(key, value);
-        });
-
-        return redirectResponse;
+export const AuthMiddleware = (options: Options) => {
+    if (!validateOptions(options)) {
+        throw new Error('Invalid options object');
     }
+    return (request: NextRequest): Promise<NextResponse> => {
+        return AuthMiddlewareUtils(request, options);
+    };
 };
 
 /**

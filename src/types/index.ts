@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-
 export enum Csp {
     STRICT,
     RELAXED,
     NONE
 };
 
-export type MiddlewareCallbackType = (
-    request: NextRequest, 
-    response: NextResponse
-) => Promise<void | NextResponse> | void | NextResponse;
+export type Options = {
+    allowedOrigins: string[],
+    csp: Csp,
+    isProtectedRoute?: string[],
+    redirectUrl? : string,
+    redirectParam?: boolean
+}
 
 export type JwtType = {
     iat: number,
