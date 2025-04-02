@@ -1,6 +1,6 @@
 {
   "name": "authlite",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Lite authentication system for Next.js",
   "keywords": [
     "next.js",
