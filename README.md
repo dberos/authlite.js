@@ -61,13 +61,13 @@ export const config = {
 ```
 | Parameters | Options | Required |
 |:-------------:|:--------------:|:--------------:|
-| allowedOrigins       |   an array of strings with allowed origins     |   true    |
-|   csp       |   Csp.STRICT, Csp.RELAXED, Csp.NONE     | true    |
+| allowedOrigins       |   an array of strings with allowed origins     |   false    |
+|   csp       |   Csp.STRICT, Csp.RELAXED, Csp.NONE     | false    |
 |   isProtectedRoute |  an array of strings with protected routes   |   false   |   
 |   redirectUrl |  the url to redirect to when accessing a protecting route and user is not authenticated   |   false   |
 |   redirectParm |  whether redirect searchParam will be added when accessing a protected route and user is not authenticated   |   false   |
 
-Modify the options to fit your app needs. Cors will block requests from unauthorized origins and return origin, method and headers Cors headers for preflight requests.  For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. Add the array of protected routes and a redirect url to block user from accessing authenticated - only resources. Add `true` to redirectParam to have a redirect searchParam back at the redirectUrl.
+Modify the options to fit your app needs. Everything is optional, though recommended. The basic middleware just handles session. Cors will block requests from unauthorized origins and return origin, method and headers Cors headers for preflight requests, if it is configured.  For csp, see [docs](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy) for the setup. `STRICT` adds nonces, `RELAXED` doesn't and `NONE` doesn't have any policy, which is the default. Either `STRICT` and `RELAXED` are configured only for production(`npm run build && npm run start`) so always test in production as well. Add the array of protected routes and a redirect url to block user from accessing authenticated - only resources. Add `true` to redirectParam to have a redirect searchParam back at the redirectUrl.
 
 #### Useful configurations
 

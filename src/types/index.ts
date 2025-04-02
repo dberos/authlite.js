@@ -5,8 +5,8 @@ export enum Csp {
 };
 
 export type Options = {
-    allowedOrigins: string[],
-    csp: Csp,
+    allowedOrigins?: string[],
+    csp?: Csp,
     isProtectedRoute?: string[],
     redirectUrl? : string,
     redirectParam?: boolean

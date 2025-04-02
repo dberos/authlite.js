@@ -20,12 +20,12 @@ class MiddlewareResponse {
     private request: NextRequest;
 
     // Middleware options
-    private options: Options
+    private options?: Options
 
     // Resolve promises
     private chain: Promise<void>;
 
-    public constructor(request: NextRequest, options: Options) {
+    public constructor(request: NextRequest, options?: Options) {
         this.request = request;
         this.response = NextResponse.next({
             request: {
@@ -72,10 +72,16 @@ class MiddlewareResponse {
     }
 
     public protect(): MiddlewareResponse {
-        const isProtectedRoute = this.options.isProtectedRoute;
-        const redirectUrl = this.options.redirectUrl;
+        const isProtectedRoute = this.options?.isProtectedRoute;
+        const redirectUrl = this.options?.redirectUrl;
 
-        if (!isProtectedRoute?.length || !redirectUrl) return this;
+        if (
+            !isProtectedRoute?.length || 
+            !redirectUrl ||
+            !Array.isArray(isProtectedRoute)
+        ) {
+            return this;
+        }
         this.chain = this.chain.then(async () => {
             if (!this.response.cookies?.get('session')) {
                 if (isProtectedRoute.some((route) => new RegExp(route).test(this.request.nextUrl.pathname))) {
@@ -86,7 +92,7 @@ class MiddlewareResponse {
                     // Create a new URL
                     const url = new URL(redirectUrl, this.request.url);
 
-                    if (this.options.redirectParam) {
+                    if (this.options?.redirectParam) {
                         url.searchParams.set('redirect', this.request.nextUrl.pathname);
                     }
         
@@ -122,7 +128,7 @@ class MiddlewareResponse {
 
 export const AuthMiddlewareUtils = async (
     request: NextRequest,
-    options: Options
+    options?: Options
 ): Promise<NextResponse> => {
     // Create a new response and handle all middleware options
     const response = await new MiddlewareResponse(request, options)
@@ -145,8 +151,12 @@ export const AuthMiddlewareUtils = async (
 const handleCors = async (
     request: NextRequest, 
     response: NextResponse,
-    options: Options
+    options?: Options
 ): Promise<NextResponse> => {
+    // Check for available CORS options
+    if (!Array.isArray(options?.allowedOrigins) || options.allowedOrigins.length === 0) {
+        return response;
+    }
     // CORS options
     const requestHeaders = new Headers(request.headers);
     const origin = requestHeaders.get("origin") ?? "";
@@ -188,45 +198,15 @@ const handleCors = async (
 const handleCsp = async (
     request: NextRequest, 
     response: NextResponse,
-    options: Options
+    options?: Options
 ): Promise<NextResponse> => {
-    if (process.env.NODE_ENV === 'development') {
+    if (
+        process.env.NODE_ENV === 'development' || 
+        options?.csp === undefined || 
+        options.csp === Csp.NONE
+    ) {
 		return response;
 	}
-    if (options.csp === Csp.STRICT) {
-        const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
-        const cspHeader = `
-            default-src 'self';
-            script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
-            style-src 'self' 'nonce-${nonce}';
-            img-src 'self' blob: data:;
-            font-src 'self';
-            object-src 'none';
-            base-uri 'self';
-            form-action 'self';
-            frame-ancestors 'none';
-            upgrade-insecure-requests;
-        `
-        // Replace newline characters and spaces
-        const contentSecurityPolicyHeaderValue = cspHeader
-            .replace(/\s{2,}/g, ' ')
-            .trim()
-        
-        const requestHeaders = new Headers(request.headers)
-        requestHeaders.set('X-Nonce', nonce)
-        
-        requestHeaders.set(
-            'Content-Security-Policy',
-            contentSecurityPolicyHeaderValue
-        )
-
-        response.headers.set(
-            'Content-Security-Policy',
-            contentSecurityPolicyHeaderValue
-        )
-        
-        return response;
-    }
     else if (options.csp === Csp.RELAXED) {
         const cspHeader = `
         default-src 'self';
@@ -260,6 +240,38 @@ const handleCsp = async (
         return response;
     }
     else {
+        // Csp.STRICT
+        const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+        const cspHeader = `
+            default-src 'self';
+            script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+            style-src 'self' 'nonce-${nonce}';
+            img-src 'self' blob: data:;
+            font-src 'self';
+            object-src 'none';
+            base-uri 'self';
+            form-action 'self';
+            frame-ancestors 'none';
+            upgrade-insecure-requests;
+        `
+        // Replace newline characters and spaces
+        const contentSecurityPolicyHeaderValue = cspHeader
+            .replace(/\s{2,}/g, ' ')
+            .trim()
+        
+        const requestHeaders = new Headers(request.headers)
+        requestHeaders.set('X-Nonce', nonce)
+        
+        requestHeaders.set(
+            'Content-Security-Policy',
+            contentSecurityPolicyHeaderValue
+        )
+
+        response.headers.set(
+            'Content-Security-Policy',
+            contentSecurityPolicyHeaderValue
+        )
+        
         return response;
     }
 }

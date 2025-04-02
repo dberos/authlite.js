@@ -1,19 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthMiddlewareUtils } from "../../server";
-import { Csp, Options } from "../../types";
-
-// Check for JavaScript apps
-const validateOptions = (options: any): options is Options => {
-    return (
-        options &&
-        Array.isArray(options.allowedOrigins) &&
-        typeof options.csp === 'number' &&
-        Object.values(Csp).includes(options.csp) &&
-        (options.isProtectedRoute === undefined || Array.isArray(options.isProtectedRoute)) &&
-        (options.redirectUrl === undefined || typeof options.redirectUrl === 'string') &&
-        (options.redirectParam === undefined || typeof options.redirectParam === 'boolean')
-    );
-};
+import { Options } from "../../types";
 
 /**
  * Middleware utility function
@@ -21,10 +8,7 @@ const validateOptions = (options: any): options is Options => {
  * @returns response
  * @throws Error for invalid options object, redirectUrl being a protected route, invalid jwt signature
  */
-export const AuthMiddleware = (options: Options) => {
-    if (!validateOptions(options)) {
-        throw new Error('Invalid options object');
-    }
+export const AuthMiddleware = (options?: Options) => {
     return (request: NextRequest): Promise<NextResponse> => {
         return AuthMiddlewareUtils(request, options);
     };
