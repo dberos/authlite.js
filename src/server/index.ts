@@ -83,7 +83,7 @@ class MiddlewareResponse {
             return this;
         }
         this.chain = this.chain.then(async () => {
-            if (!this.response.cookies?.get('session')) {
+            if (!this.response.cookies?.get('session')?.value) {
                 if (isProtectedRoute.some((route) => new RegExp(route).test(this.request.nextUrl.pathname))) {
                     // Prevent endless loop by redirecting to a protected route
                     if (isProtectedRoute.some((route) => new RegExp(route).test(redirectUrl))) {
@@ -287,7 +287,10 @@ const handleSession = async (request: NextRequest, response: NextResponse): Prom
     // Get the session cookie
     const token = request.cookies.get('session')?.value;
     // If no session is available return
-    if (!token) return response;
+    if (!token) {
+        response.cookies?.delete('session');
+        return response;
+    }
 
     // Decode the token verifying the signature
     const decodedToken = await decodeJwt(token, JWT_SECRET);
