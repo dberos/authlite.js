@@ -163,13 +163,20 @@ const handleCors = async (
     const allowedMethods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"];
     const allowedHeaders = ["Content-Type", "Authorization", "X-Csrf-Token", "X-Nonce"];
 
+    // Block CORS requests from unauthorized origins
+    if (origin && !options.allowedOrigins.includes(origin)) {
+        return NextResponse.json(
+            { error: "Request blocked from CORS policy" },
+            { status: 403 }
+        );
+    }
+
     // Add CORS headers
     const corsHeaders = {
         "Access-Control-Allow-Origin": options.allowedOrigins.join(","),
         "Access-Control-Allow-Methods": allowedMethods.join(","),
         "Access-Control-Allow-Headers": allowedHeaders.join(",")
     };
-    Object.entries(corsHeaders).forEach(([key, value]) => response.headers.set(key, value));
 
     // Handle Preflight Request
     if (request.method === "OPTIONS") {
@@ -177,14 +184,7 @@ const handleCors = async (
         return new NextResponse(null, { status: 204, headers: corsHeaders });
     }
 
-    // Block CORS requests from unauthorized origins
-    if (origin && !options.allowedOrigins.includes(origin)) {
-        // If trying to add all previous headers, it doesn't return a 403
-        return NextResponse.json(
-            { error: "Request blocked from CORS policy" },
-            { status: 403, headers: corsHeaders }
-        );
-    }
+    Object.entries(corsHeaders).forEach(([key, value]) => response.headers.set(key, value));
 
     return response;
 }
